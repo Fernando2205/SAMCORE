@@ -1,0 +1,14 @@
+.*
+USB_template/
+viejo
+Template actualizado
+
+# MVP SamCore
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.pyc
+backend/*.db
+backend/.admin_inicial.txt
+.env
