@@ -10,5 +10,9 @@ dist/
 __pycache__/
 *.pyc
 backend/*.db
+# bancos de memoria por categoria (~440 MB de binarios): su fuente oficial
+# para el despliegue es un repositorio de datasets en Hugging Face Hub,
+# verificado por los manifiestos SHA-256; el contrato esta en su README
+backend/artefactos/*/
 backend/.admin_inicial.txt
 .env
