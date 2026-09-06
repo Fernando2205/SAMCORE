@@ -191,7 +191,7 @@ def imagenes(categoria: str, usuario: UsuarioActual) -> dict:
         raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría no soportada."})
     return {
         "categoria": categoria,
-        "umbral": galeria.CATEGORIAS[categoria]["umbral"],
+        "umbral": galeria.umbral_de(categoria),
         "imagenes": galeria.listar_imagenes(categoria),
     }
 

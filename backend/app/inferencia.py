@@ -22,7 +22,7 @@ def _generador(categoria: str, imagen_id: str) -> random.Random:
 
 
 def inspeccionar(categoria: str, imagen_id: str) -> dict:
-    umbral = galeria.CATEGORIAS[categoria]["umbral"]
+    umbral = galeria.umbral_de(categoria)
     r = _generador(categoria, imagen_id)
     es_defectuosa = not imagen_id.startswith("good/")
 

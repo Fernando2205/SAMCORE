@@ -25,17 +25,25 @@ _IMAGENES_POR_TIPO = 2
 _IMAGENES_BUENAS = 6
 
 
+def umbral_de(categoria: str) -> float:
+    """Umbral calibrado real si hay artefactos validos; si no, el ilustrativo."""
+    from . import artefactos
+
+    calibrado = artefactos.umbral_calibrado(categoria)
+    return calibrado if calibrado is not None else CATEGORIAS[categoria]["umbral"]
+
+
 def listar_categorias() -> list[dict]:
     from . import artefactos
 
     return [
         {
             "nombre": nombre,
-            "umbral": datos["umbral"],
+            "umbral": umbral_de(nombre),
             "imagenes": len(listar_imagenes(nombre)),
             **artefactos.estado_categoria(nombre),
         }
-        for nombre, datos in CATEGORIAS.items()
+        for nombre in CATEGORIAS
     ]
 
 

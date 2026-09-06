@@ -62,6 +62,20 @@ def disponibles(categoria: str) -> bool:
     return valido
 
 
+def umbral_calibrado(categoria: str) -> float | None:
+    """Umbral real de calibracion.json cuando la categoria tiene artefactos validos."""
+    if not disponibles(categoria):
+        return None
+    try:
+        datos = json.loads(
+            (RUTA_ARTEFACTOS / categoria / "calibracion.json").read_text(encoding="utf-8")
+        )
+        return float(datos["umbral"])
+    except (KeyError, TypeError, ValueError, OSError):
+        log.warning("evento=calibracion_ilegible categoria=%s", categoria)
+        return None
+
+
 def motor_para(categoria: str) -> str:
     """"real" cuando hay artefactos validos y el motor real este integrado (T6)."""
     # Integracion del motor real pendiente (T6): aunque existan artefactos
