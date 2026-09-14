@@ -33,6 +33,41 @@ function Esqueleto () {
   return <div className='h-[300px] animate-pulse border border-dashed border-borde-input bg-papel-3' />
 }
 
+function Caja ({ caja, tam, discontinua }: { caja: number[], tam: number[], discontinua: boolean }) {
+  const [x0, y0, x1, y1] = caja
+  const [ancho, alto] = tam
+  return (
+    <span
+      className={`pointer-events-none absolute border-2 border-marca ${discontinua ? 'border-dashed' : ''}`}
+      style={{
+        left: `${(100 * x0) / ancho}%`,
+        top: `${(100 * y0) / alto}%`,
+        width: `${(100 * (x1 - x0 + 1)) / ancho}%`,
+        height: `${(100 * (y1 - y0 + 1)) / alto}%`
+      }}
+    />
+  )
+}
+
+function Segmentacion ({ resultado }: { resultado: Resultado }) {
+  const ladoRoi = resultado.caja.roi[2] - resultado.caja.roi[0] + 1
+  const ladoImagen = Math.max(resultado.tam[0], resultado.tam[1])
+  return (
+    <span className='relative inline-block max-h-full max-w-full'>
+      <img src={resultado.imagenes.original} alt='' className='max-h-[298px] max-w-full object-contain' />
+      <img src={resultado.imagenes.mascara} alt='Máscara elegida por SAM' className='absolute inset-0 h-full w-full object-contain' />
+      <Caja caja={resultado.caja.sam} tam={resultado.tam} discontinua={false} />
+      {ladoRoi < ladoImagen && <Caja caja={resultado.caja.roi} tam={resultado.tam} discontinua />}
+      <img
+        src={resultado.imagenes.roi}
+        alt='Recorte que analiza PatchCore'
+        title='Recorte que analiza PatchCore'
+        className='absolute bottom-1 right-1 w-[30%] border border-tinta bg-white shadow'
+      />
+    </span>
+  )
+}
+
 export function PaginaInspeccion () {
   const [parametros] = useSearchParams()
   const ubicacion = useLocation()
@@ -186,12 +221,12 @@ export function PaginaInspeccion () {
               : (
                 <>
                   <Figura
-                    titulo='Fig. 2 — ROI.'
+                    titulo='Fig. 2 — Segmentación.'
                     nota={degradada
-                      ? 'Recorte de respaldo sobre la máscara de mayor área.'
-                      : `Caja cuadrada con margen sobre la máscara elegida (${resultado.caja.roi[2] - resultado.caja.roi[0] + 1} px de lado).`}
+                      ? 'Máscara de respaldo (mayor área) y recorte que analiza PatchCore.'
+                      : `Máscara elegida por SAM, su caja y la caja cuadrada con margen (${resultado.caja.roi[2] - resultado.caja.roi[0] + 1} px). Recuadro: recorte que analiza PatchCore.`}
                   >
-                    <img src={resultado.imagenes.roi} alt='ROI' className='max-h-full max-w-full object-contain' />
+                    <Segmentacion resultado={resultado} />
                   </Figura>
                   <Figura titulo='Fig. 3 — Mapa de calor.' nota={anomalo ? 'Re-proyectado a coordenadas de la imagen original.' : 'Sin regiones que se acerquen al umbral.'}>
                     <span className='relative inline-block max-h-full max-w-full'>

@@ -46,9 +46,9 @@ def test_inspeccion_de_galeria_genera_informe_completo(usuario_a):
     assert datos["veredicto"] in ("ANOMALO", "NORMAL")
     assert datos["estado_roi"] in ("ROI_OK", "ROI_DEGRADADA")
     assert datos["origen"] == "galeria"
-    assert set(datos["imagenes"]) == {"original", "roi", "mapa"}
+    assert set(datos["imagenes"]) == {"original", "roi", "mapa", "mascara"}
     assert set(datos["tiempos_ms"]) >= {"segmentacion", "deteccion", "total"}
-    for clase in ("roi", "mapa"):
+    for clase in ("roi", "mapa", "mascara"):
         imagen = usuario_a.get(datos["imagenes"][clase])
         assert imagen.status_code == 200 and imagen.headers["content-type"] == "image/png"
     original = usuario_a.get(datos["imagenes"]["original"])
@@ -220,7 +220,7 @@ def test_m17_imagen_propia_recodificada_privada_y_borrable(usuario_a, usuario_b,
     datos = r.json()
     assert datos["origen"] == "propia" and datos["imagen_id"].startswith("propia/")
     carpeta = raiz_temporal / "datos" / "inspecciones" / str(datos["id"])
-    assert (carpeta / "original.png").is_file() and (carpeta / "mapa.png").is_file() and (carpeta / "roi.png").is_file()
+    assert all((carpeta / f"{n}.png").is_file() for n in ("original", "mapa", "roi", "mascara"))
     with Image.open(carpeta / "original.png") as guardada:
         assert "Comment" not in guardada.info and "Author" not in guardada.info
     assert usuario_a.get(datos["imagenes"]["original"]).status_code == 200

@@ -51,6 +51,7 @@ class ResultadoInferencia(TypedDict, total=False):
     _mapa: np.ndarray
     _recorte: Image.Image
     _mapa_imagen: Image.Image
+    _mascara_imagen: Image.Image
 
 
 def _elegir_dispositivo_y_precision() -> tuple[torch.device, str]:
@@ -144,7 +145,7 @@ class OrquestadorInferencia:
 
         t0 = time.perf_counter()
         mascaras = self._segmentador.segmentar(np.asarray(imagen))
-        caja_sam, _seg, _meta, estado = self._selector.seleccionar(mascaras, imagen.size)
+        caja_sam, seg, _meta, estado = self._selector.seleccionar(mascaras, imagen.size)
         caja_roi = self._selector.caja_definitiva(caja_sam, imagen.size)
         recorte = self._reproyector.recortar(imagen, caja_roi)
         t1 = time.perf_counter()
@@ -176,6 +177,7 @@ class OrquestadorInferencia:
             "_mapa": mapa,
             "_recorte": recorte,
             "_mapa_imagen": self._reproyector.a_imagen(mapa, banco.umbral),
+            "_mascara_imagen": self._reproyector.mascara_a_imagen(seg, imagen.size),
         }
 
 

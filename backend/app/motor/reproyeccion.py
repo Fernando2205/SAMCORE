@@ -45,13 +45,33 @@ def _paleta_jet(valores: np.ndarray) -> np.ndarray:
 
 
 def mapa_a_imagen(mapa: np.ndarray, umbral: float) -> Image.Image:
-    """Superposicion RGBA: color por intensidad relativa al umbral y
-    transparencia creciente con la puntuacion (0 = transparente)."""
+    """Superposicion RGBA: color por intensidad relativa al umbral;
+    transparente por debajo de un cuarto de la escala y opacidad creciente
+    con la puntuacion, para que solo se vean las zonas que se acercan al
+    umbral."""
     escala = max(umbral * 1.5, 1e-6)
     v = np.clip(mapa / escala, 0.0, 1.0).astype(np.float32)
     rgb = _paleta_jet(v)
-    alfa = (np.clip(v * 1.6, 0.0, 0.85) * 255).astype(np.uint8)
+    alfa = (np.clip((v - 0.25) / 0.75, 0.0, 1.0) * 0.85 * 255).astype(np.uint8)
     rgba = np.dstack([rgb, alfa])
+    return Image.fromarray(rgba, mode="RGBA")
+
+
+def mascara_a_imagen(seg: np.ndarray | None, tam: tuple[int, int]) -> Image.Image:
+    """Superposicion RGBA de la mascara elegida por SAM: relleno translucido
+    y contorno opaco. tam = (ancho, alto). Sin mascara -> transparente."""
+    ancho, alto = tam
+    rgba = np.zeros((alto, ancho, 4), dtype=np.uint8)
+    if seg is not None and seg.shape == (alto, ancho) and seg.any():
+        m = seg.astype(bool)
+        interior = m.copy()
+        interior[1:, :] &= m[:-1, :]
+        interior[:-1, :] &= m[1:, :]
+        interior[:, 1:] &= m[:, :-1]
+        interior[:, :-1] &= m[:, 1:]
+        borde = m & ~interior
+        rgba[m] = (12, 122, 107, 90)
+        rgba[borde] = (12, 122, 107, 255)
     return Image.fromarray(rgba, mode="RGBA")
 
 
@@ -87,4 +107,5 @@ class ReProyectorMapa:
     reproyectar = staticmethod(reproyectar)
     recortar = staticmethod(recortar)
     a_imagen = staticmethod(mapa_a_imagen)
+    mascara_a_imagen = staticmethod(mascara_a_imagen)
     regiones = staticmethod(regiones_de)

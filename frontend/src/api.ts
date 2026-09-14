@@ -50,7 +50,7 @@ export interface Resultado {
   regiones: Region[]
   tiempos_ms: { segmentacion: number, deteccion: number, reproyeccion: number, total: number }
   motor: string
-  imagenes: { original: string, roi: string, mapa: string }
+  imagenes: { original: string, roi: string, mapa: string, mascara: string }
   creada_en?: string
 }
 

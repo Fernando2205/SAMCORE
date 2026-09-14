@@ -4,6 +4,7 @@
         informe.json    resultado completo (sin arreglos)
         roi.png         recorte de la ROI
         mapa.png        mapa de anomalias re-proyectado (RGBA)
+        mascara.png     mascara elegida por SAM sobre la imagen original (RGBA)
         original.png    solo para imagenes propias (version re-codificada)
 
 Las rutas se derivan del identificador numerico de la inspeccion, nunca de
@@ -17,7 +18,7 @@ from pathlib import Path
 from PIL import Image
 
 RUTA_DATOS = Path(os.environ.get("SAMCORE_DATOS", Path(__file__).resolve().parent.parent / "datos"))
-CLASES = ("original", "roi", "mapa")
+CLASES = ("original", "roi", "mapa", "mascara")
 
 
 def carpeta(inspeccion_id: int) -> Path:
@@ -39,6 +40,9 @@ def guardar(inspeccion_id: int, resultado: dict, original: Image.Image | None = 
     mapa = resultado.get("_mapa_imagen")
     if mapa is not None:
         mapa.save(destino / "mapa.png", format="PNG", optimize=True)
+    mascara = resultado.get("_mascara_imagen")
+    if mascara is not None:
+        mascara.save(destino / "mascara.png", format="PNG", optimize=True)
     (destino / "informe.json").write_text(
         json.dumps(_publico(resultado), ensure_ascii=False), encoding="utf-8"
     )

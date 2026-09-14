@@ -62,6 +62,12 @@ def test_derivados_visuales():
     assert imagen.getpixel((80, 50))[3] > 0 and imagen.getpixel((5, 5))[3] == 0
     regiones = reproyeccion.regiones_de(mapa, umbral=2.0)
     assert len(regiones) == 1 and 0.4 < regiones[0]["x"] < 0.6 and 0.35 < regiones[0]["y"] < 0.5
+    seg = np.zeros((120, 160), dtype=bool)
+    seg[30:90, 40:120] = True
+    mascara = reproyeccion.mascara_a_imagen(seg, (160, 120))
+    assert mascara.size == (160, 120)
+    assert mascara.getpixel((80, 60))[3] == 90 and mascara.getpixel((40, 60))[3] == 255 and mascara.getpixel((5, 5))[3] == 0
+    assert reproyeccion.mascara_a_imagen(None, (160, 120)).getpixel((80, 60))[3] == 0
 
 
 def _png_bytes(w, h, formato="PNG"):

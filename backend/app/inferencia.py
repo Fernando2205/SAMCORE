@@ -41,9 +41,11 @@ def inspeccionar(imagen: Image.Image, categoria: str, clave: str) -> dict:
     caja_sam = (x0, y0, x0 + lado - 1, y0 + lado - 1)
     caja_roi = seleccion.expandir_caja(caja_sam, imagen.size)
 
+    yy, xx = np.mgrid[0:alto, 0:ancho]
+    cx, cy = (caja_sam[0] + caja_sam[2]) / 2, (caja_sam[1] + caja_sam[3]) / 2
+    seg = (((xx - cx) / (lado / 2)) ** 2 + ((yy - cy) / (lado / 2.4)) ** 2) <= 1.0  # elipse dentro de la caja
     mapa = np.zeros((alto, ancho), dtype=np.float32)
     if veredicto == "ANOMALO":
-        yy, xx = np.mgrid[0:alto, 0:ancho]
         for _ in range(r.randint(1, 2)):
             cx, cy = r.uniform(0.3, 0.7) * ancho, r.uniform(0.3, 0.7) * alto
             radio = r.uniform(0.08, 0.16) * max(ancho, alto)
@@ -64,4 +66,5 @@ def inspeccionar(imagen: Image.Image, categoria: str, clave: str) -> dict:
         "_mapa": mapa,
         "_recorte": reproyeccion.recortar(imagen, caja_roi),
         "_mapa_imagen": reproyeccion.mapa_a_imagen(mapa, umbral),
+        "_mascara_imagen": reproyeccion.mascara_a_imagen(seg, imagen.size),
     }

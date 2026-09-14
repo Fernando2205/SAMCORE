@@ -311,6 +311,7 @@ def _respuesta(informe: dict) -> dict:
         "original": original,
         "roi": f"/api/historial/{inspeccion_id}/imagen/roi",
         "mapa": f"/api/historial/{inspeccion_id}/imagen/mapa",
+        "mascara": f"/api/historial/{inspeccion_id}/imagen/mascara",
     }
     return publico
 
