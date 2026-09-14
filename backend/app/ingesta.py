@@ -11,7 +11,7 @@ Orden de las comprobaciones, del mas barato al mas caro:
 """
 from io import BytesIO
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 MAX_BYTES = 8 * 1024 * 1024
 MAX_PIXELES = 25_000_000
@@ -56,7 +56,10 @@ def ingerir(datos: bytes) -> Image.Image:
                 raise ImagenRechazada("dimensiones", "La imagen tiene demasiados píxeles.")
             if min(ancho, alto) < LADO_MINIMO:
                 raise ImagenRechazada("dimensiones", "La imagen es demasiado pequeña (mínimo 64 píxeles por lado).")
-            limpia = imagen.convert("RGB")
+            # La orientacion EXIF (fotos de celular) se aplica a los pixeles
+            # antes de descartar los metadatos; si no, la imagen queda girada.
+            orientada = ImageOps.exif_transpose(imagen)
+            limpia = (orientada if orientada is not None else imagen).convert("RGB")
     except Image.DecompressionBombError:
         raise ImagenRechazada("dimensiones", "La imagen tiene demasiados píxeles.") from None
     except (UnidentifiedImageError, OSError, ValueError):

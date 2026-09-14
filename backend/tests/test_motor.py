@@ -82,6 +82,15 @@ def test_ingesta_acepta_png_y_jpeg_y_reduce():
     assert ingesta.ingerir(_png_bytes(300, 200, "JPEG")).size == (300, 200)
 
 
+def test_ingesta_aplica_orientacion_exif_y_la_descarta():
+    exif = Image.Exif()
+    exif[0x0112] = 6  # rotar 90 grados en sentido horario al mostrar
+    salida = io.BytesIO()
+    Image.new("RGB", (300, 200), (10, 20, 30)).save(salida, format="JPEG", exif=exif.tobytes())
+    imagen = ingesta.ingerir(salida.getvalue())
+    assert imagen.size == (200, 300) and not imagen.info
+
+
 def test_ingesta_rechaza():
     with pytest.raises(ingesta.ImagenRechazada) as exc:
         ingesta.ingerir(b"BM" + b"\x00" * 200)
