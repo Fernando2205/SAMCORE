@@ -439,7 +439,6 @@ export function PaginaEstadisticas () {
         <span className='font-mono text-[12px] text-texto-2'>{datos.usuarios_activos} cuentas activas</span>
       </div>
 
-
       {datos.total === 0
         ? (
           <div className='mt-10 flex flex-col items-center gap-3 self-center border border-hairline bg-white px-14 py-12 text-center'>
