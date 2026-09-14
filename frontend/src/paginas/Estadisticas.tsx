@@ -369,6 +369,46 @@ function TablaMetricas ({ datos }: { datos: MetricasExperimento }) {
   )
 }
 
+/** Panel plegable controlado: el contenido se vuelve a montar en cada apertura
+ * (la animación de entrada se repite) y se desvanece antes de cerrarse. */
+function Desplegable ({ titulo, children }: { titulo: string, children: React.ReactNode }) {
+  const [abierto, setAbierto] = useState(false)
+  const [cerrando, setCerrando] = useState(false)
+  const [apertura, setApertura] = useState(0)
+  const alternar = () => {
+    if (abierto) {
+      setCerrando(true)
+      window.setTimeout(() => { setAbierto(false); setCerrando(false) }, 220)
+    } else {
+      setApertura(a => a + 1)
+      setAbierto(true)
+    }
+  }
+  return (
+    <div className='mt-3 border border-hairline bg-papel px-4 py-3'>
+      <button
+        type='button'
+        aria-expanded={abierto}
+        onClick={alternar}
+        className='flex w-full cursor-pointer items-center gap-2 text-left text-[13px] font-semibold text-tinta'
+      >
+        <span
+          className='inline-block text-[11px] text-marca transition-transform duration-200'
+          style={{ transform: abierto && !cerrando ? 'rotate(90deg)' : 'none' }}
+        >
+          ▶
+        </span>
+        {titulo}
+      </button>
+      {abierto && (
+        <div key={apertura} className={cerrando ? 'anim-desvanecer' : ''}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------- página
 function Kpi ({ rotulo, valor, formato, detalle, orden = 0 }: {
   rotulo: string
@@ -515,11 +555,7 @@ export function PaginaEstadisticas () {
               definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
               máscaras de referencia del conjunto de datos.
             </p>
-            <details className='desplegable mt-3 border border-hairline bg-papel px-4 py-3'>
-              <summary className='flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-tinta'>
-                <span className='flecha inline-block text-[11px] text-marca'>▶</span>
-                Cómo leer las cuatro métricas
-              </summary>
+            <Desplegable titulo='Cómo leer las cuatro métricas'>
               <dl className='mt-3 grid grid-cols-[170px_1fr] gap-x-4 gap-y-2.5 text-[12.5px] leading-relaxed'>
                 {[...DEFINICIONES, {
                   clave: 'diferencia',
@@ -532,7 +568,7 @@ export function PaginaEstadisticas () {
                   </div>
                 ))}
               </dl>
-            </details>
+            </Desplegable>
           </div>
         </Tarjeta>
       )}

@@ -58,18 +58,18 @@ body {
   animation: crecer-x 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
   animation-delay: var(--retraso, 0ms);
 }
-/* Desplegable: la flecha gira al abrir y el contenido entra escalonado
-   (los elementos pasan de no renderizados a visibles, lo que reinicia su animación). */
-.desplegable summary::-webkit-details-marker { display: none; }
-.desplegable summary { list-style: none; }
-.desplegable .flecha { transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1); }
-.desplegable[open] .flecha { transform: rotate(90deg); }
+@keyframes desvanecer {
+  to { opacity: 0; transform: translateY(6px); }
+}
+.anim-desvanecer {
+  animation: desvanecer 220ms ease both;
+}
 /* Una tarjeta fuera de pantalla mantiene sus animaciones en pausa hasta que se ve. */
 .anim-espera, .anim-espera .anim-aparecer, .anim-espera .anim-crecer-y, .anim-espera .anim-crecer-x {
   animation-play-state: paused;
 }
 @media (prefers-reduced-motion: reduce) {
-  .anim-aparecer, .anim-crecer-y, .anim-crecer-x {
+  .anim-aparecer, .anim-crecer-y, .anim-crecer-x, .anim-desvanecer {
     animation: none;
   }
 }
