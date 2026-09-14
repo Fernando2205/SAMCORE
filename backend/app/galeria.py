@@ -7,6 +7,7 @@ cliente se valida contra ese mapa y ninguna ruta se construye con texto del
 cliente (M-03).
 """
 import os
+import random
 from pathlib import Path
 
 CATEGORIAS_MVTEC = (
@@ -36,7 +37,11 @@ def escanear() -> None:
             for tipo_dir in sorted(p for p in carpeta.iterdir() if p.is_dir()):
                 for archivo in sorted(p for p in tipo_dir.iterdir() if p.suffix.lower() in _EXTENSIONES):
                     entradas[f"{tipo_dir.name}/{archivo.name}"] = archivo
-        _mapa[categoria] = entradas
+        # Orden mezclado pero estable por categoria: la galeria no revela el
+        # tipo de cada imagen ni agrupa las normales al principio.
+        ids = list(entradas)
+        random.Random(f"samcore-galeria-{categoria}").shuffle(ids)
+        _mapa[categoria] = {i: entradas[i] for i in ids}
 
 
 def umbral_de(categoria: str) -> float:

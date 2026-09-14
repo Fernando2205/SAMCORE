@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import type { Categoria, Galeria } from '../api'
 
-function Miniatura ({ categoria, imagenId, onClick }: { categoria: string, imagenId: string, onClick: () => void }) {
-  const [tipo, nombre] = imagenId.split('/')
+function Miniatura ({ categoria, imagenId, numero, onClick }: { categoria: string, imagenId: string, numero: number, onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -19,8 +18,8 @@ function Miniatura ({ categoria, imagenId, onClick }: { categoria: string, image
         />
       </span>
       <span className='flex items-baseline justify-between border-t border-hairline-2 px-3 py-2 font-mono text-[11px] text-texto-3 group-hover:text-tinta'>
-        <span className={tipo === 'good' ? '' : 'text-anomalo-texto'}>{tipo}</span>
-        <span>{nombre}</span>
+        <span>imagen</span>
+        <span>{String(numero).padStart(2, '0')}</span>
       </span>
     </button>
   )
@@ -114,7 +113,7 @@ export function PaginaGaleria () {
         <>
           <div className='mt-6 flex items-baseline justify-between'>
             <h1 className='font-serif text-2xl'>Galería de prueba — {galeria.categoria}</h1>
-            <span className='text-[12.5px] text-texto-3'>Selecciona una imagen para inspeccionarla</span>
+            <span className='text-[12.5px] text-texto-3'>Selecciona una imagen para inspeccionarla. La galería no indica cuáles tienen defectos.</span>
           </div>
           {galeria.imagenes.length === 0
             ? (
@@ -124,12 +123,13 @@ export function PaginaGaleria () {
               )
             : (
               <div className='mt-3 grid grid-cols-6 gap-4'>
-                {galeria.imagenes.map(imagen => (
+                {galeria.imagenes.map((imagen, i) => (
                   <Miniatura
                     key={imagen}
                     categoria={galeria.categoria}
                     imagenId={imagen}
-                    onClick={() => navegar(`/inspeccion?categoria=${galeria.categoria}&imagen=${encodeURIComponent(imagen)}`)}
+                    numero={i + 1}
+                    onClick={() => navegar(`/inspeccion?categoria=${galeria.categoria}&imagen=${encodeURIComponent(imagen)}&n=${i + 1}`)}
                   />
                 ))}
               </div>

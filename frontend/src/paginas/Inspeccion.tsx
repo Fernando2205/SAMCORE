@@ -42,6 +42,7 @@ export function PaginaInspeccion () {
   const archivo = estadoNavegacion.archivo
   const categoria = parametros.get('categoria') ?? estadoNavegacion.categoria ?? ''
   const imagen = parametros.get('imagen') ?? ''
+  const numeroGaleria = parametros.get('n')
   const reabriendo = idInforme !== null
 
   const [etapa, setEtapa] = useState(0)
@@ -107,7 +108,12 @@ export function PaginaInspeccion () {
   const propia = resultado?.origen === 'propia' || (resultado === null && archivo !== undefined)
   const pctBarra = resultado === null ? 0 : Math.min(100, Math.round((resultado.puntuacion / (resultado.umbral / 0.68)) * 100))
   const urlOriginal = resultado?.imagenes.original ?? vistaPreviaPropia ?? (categoria !== '' && imagen !== '' ? `/api/galeria/${categoria}/imagen/${imagen}` : null)
-  const etiquetaImagen = resultado !== null ? `${resultado.categoria} / ${resultado.imagen_id}` : `${categoria} / ${archivo?.name ?? imagen}`
+  const tipoReal = resultado?.origen === 'galeria' ? resultado.imagen_id.split('/')[0] : null
+  const etiquetaImagen = archivo !== undefined
+    ? `${categoria} / ${archivo.name}`
+    : resultado?.origen === 'propia'
+      ? `${resultado.categoria} / imagen propia`
+      : `${resultado?.categoria ?? categoria} / imagen de la galería${numeroGaleria !== null ? ` ${numeroGaleria.padStart(2, '0')}` : ''}`
 
   const borrar = () => {
     if (resultado === null || !window.confirm('¿Borrar esta inspección y sus imágenes de tu historial?')) return
@@ -307,7 +313,13 @@ export function PaginaInspeccion () {
                         )
                       : (
                         <p className='mt-2 text-[12.5px] leading-relaxed text-texto-2'>
-                          Galería de prueba de MVTec AD (CC BY-NC-SA 4.0) · {resultado.imagen_id}
+                          Galería de prueba de MVTec AD (CC BY-NC-SA 4.0). Tipo real en el dataset:{' '}
+                          <strong className={tipoReal === 'good' ? 'text-vnormal-texto' : 'text-anomalo-texto'}>
+                            {tipoReal === 'good' ? 'sin defecto' : tipoReal}
+                          </strong>
+                          {tipoReal !== null && (
+                            <> · {(tipoReal === 'good') === (resultado.veredicto === 'NORMAL') ? 'el veredicto coincide' : 'el veredicto no coincide'}</>
+                          )}
                         </p>
                         )}
                   </section>
