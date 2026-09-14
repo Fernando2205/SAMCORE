@@ -102,6 +102,38 @@ def cargar_banco(categoria: str) -> np.ndarray:
     return np.ascontiguousarray(banco)
 
 
+class GestorArtefactos:
+    """Verificacion por manifiesto y carga de bancos y pesos (M-06/M-07)."""
+
+    @staticmethod
+    def verificar_sha256(ruta: Path, esperado: str) -> bool:
+        return ruta.is_file() and _sha256(ruta) == esperado
+
+    @staticmethod
+    def categorias() -> list[str]:
+        return categorias_con_artefactos()
+
+    @staticmethod
+    def cargar_banco(categoria: str, device=None):
+        import torch
+
+        from .motor.patchcore import BancoMemoria
+
+        tensores = torch.from_numpy(cargar_banco(categoria))
+        if device is not None:
+            tensores = tensores.to(device)
+        umbral = umbral_calibrado(categoria)
+        if umbral is None:
+            raise RuntimeError(f"Calibracion ilegible para {categoria}")
+        return BancoMemoria(categoria, tensores, umbral)
+
+    @staticmethod
+    def verificar_pesos_sam() -> bool:
+        from .motor.segmentador import verificar_checkpoint
+
+        return verificar_checkpoint()
+
+
 def motor_para(categoria: str) -> str:
     """'real' | 'cargando' | 'simulado' | 'sin_banco' segun el estado del motor."""
     modo = os.environ.get("SAMCORE_MOTOR", "auto")

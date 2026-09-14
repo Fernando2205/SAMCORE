@@ -10,6 +10,7 @@ puntuacion de imagen = maximo sobre los parches, y mapa 28x28 interpolado a
 224x224 con suavizado gaussiano sigma = 4.
 """
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 import torch
@@ -45,6 +46,26 @@ def _patchify(x: torch.Tensor) -> tuple[torch.Tensor, tuple[int, int]]:
     n_h, n_w = x.shape[-2], x.shape[-1]
     desplegado = desplegado.reshape(x.shape[0], x.shape[1], PATCHSIZE, PATCHSIZE, -1)
     return desplegado.permute(0, 4, 1, 2, 3), (n_h, n_w)
+
+
+@dataclass
+class BancoMemoria:
+    """Banco de parches normales de una categoria (M, 1024) y su umbral."""
+
+    categoria: str
+    tensores: torch.Tensor
+    umbral: float
+
+    @torch.inference_mode()
+    def consultar_knn(self, parches: torch.Tensor, k: int = 1) -> torch.Tensor:
+        """Distancia L2 al cuadrado al vecino mas cercano de cada parche
+        (k = 1, como el indice plano de FAISS de la referencia)."""
+        if k != 1:
+            raise ValueError("el sistema opera con un unico vecino (k = 1)")
+        q = parches.to(self.tensores.device, torch.float32)
+        b = self.tensores
+        d2 = (q * q).sum(1, keepdim=True) + (b * b).sum(1)[None, :] - 2.0 * (q @ b.T)
+        return d2.min(dim=1).values.clamp_min_(0.0)
 
 
 class DetectorPatchCore:
@@ -99,12 +120,11 @@ class DetectorPatchCore:
         return agregadas.reshape(len(agregadas), -1)
 
     @torch.inference_mode()
-    def puntuar(self, caracteristicas: torch.Tensor, banco: torch.Tensor) -> tuple[float, np.ndarray]:
-        """Puntuacion de imagen y mapa 224x224 a partir del banco (M, 1024)."""
-        q = caracteristicas.to(self.device, torch.float32)
-        b = banco.to(self.device, torch.float32)
-        d2 = (q * q).sum(1, keepdim=True) + (b * b).sum(1)[None, :] - 2.0 * (q @ b.T)
-        d_min = d2.min(dim=1).values.clamp_min_(0.0)
+    def puntuar(self, caracteristicas: torch.Tensor, banco: BancoMemoria | torch.Tensor) -> tuple[float, np.ndarray]:
+        """Puntuacion de imagen (maximo por parche) y mapa 224x224."""
+        if not isinstance(banco, BancoMemoria):
+            banco = BancoMemoria("", banco.to(self.device, torch.float32), 0.0)
+        d_min = banco.consultar_knn(caracteristicas)
         puntuacion = float(d_min.max().item())
         lado = int(round(len(d_min) ** 0.5))
         mapa = d_min.reshape(1, 1, lado, lado)
@@ -112,3 +132,7 @@ class DetectorPatchCore:
         mapa = mapa.squeeze().cpu().numpy().astype(np.float32)
         mapa = ndimage.gaussian_filter(mapa, sigma=SIGMA_SUAVIZADO).astype(np.float32)
         return puntuacion, mapa
+
+    def evaluar(self, recorte: Image.Image, banco: BancoMemoria) -> tuple[float, np.ndarray]:
+        """ROI (PIL RGB) -> (puntuacion de imagen, mapa 224x224)."""
+        return self.puntuar(self.incrustar(recorte), banco)

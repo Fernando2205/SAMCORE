@@ -4,6 +4,8 @@ Copia fiel de las funciones del cuaderno experimental (misma formula, mismos
 parametros fijados a priori). No se modifica: los bancos de memoria se
 prepararon con esta regla y cualquier cambio invalida la calibracion.
 """
+from dataclasses import dataclass
+
 import numpy as np
 
 AREA_MIN_RATIO = 0.03
@@ -90,3 +92,29 @@ def expandir_caja(caja: Caja, tam_imagen: tuple[int, int], margen: float = MARGE
     x0n = max(0, min(int(round(cx - lado / 2)), w - lado))
     y0n = max(0, min(int(round(cy - lado / 2)), h - lado))
     return x0n, y0n, x0n + lado - 1, y0n + lado - 1
+
+
+@dataclass(frozen=True)
+class PesosPuntuacion:
+    """Parametros de la regla, fijados a priori (ADR-04); no se modifican."""
+    iou_pred: float = PESO_IOU
+    estabilidad: float = PESO_ESTABILIDAD
+    compacidad: float = PESO_RELLENO
+    bordes: float = -PESO_BORDE
+    rho_objetivo: float = RHO_OBJETIVO
+    area_min: float = AREA_MIN_RATIO
+    area_max: float = AREA_MAX_RATIO
+
+
+class SelectorMascara:
+    """Selector de la mascara del objeto: regla ADR-04 + caja cuadrada ADR-10."""
+
+    def __init__(self) -> None:
+        self.pesos = PesosPuntuacion()
+
+    def seleccionar(self, mascaras: list[dict], tam_imagen: tuple[int, int]):
+        return seleccionar(mascaras, tam_imagen)
+
+    def caja_definitiva(self, caja: Caja | None, tam_imagen: tuple[int, int]) -> Caja:
+        """Caja cuadrada con margen; si no hubo mascara, sobre la imagen completa."""
+        return expandir_caja(caja if caja is not None else caja_completa(tam_imagen), tam_imagen)

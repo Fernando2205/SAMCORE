@@ -1,21 +1,23 @@
 """Orquestador de inferencia: imagen -> SAM -> regla de seleccion -> caja
 cuadrada -> PatchCore -> re-proyeccion. Concurrencia acotada a la GPU (M-01),
-tope de tiempo por etapa (M-05) y bancos cargados sin pickle (M-06).
+tope de tiempo por inspeccion (M-05) y bancos cargados sin pickle (M-06).
 """
 import logging
 import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturoAgotado
+from typing import Any, TypedDict
 
 import numpy as np
 import torch
 from PIL import Image
 
 from .. import artefactos
-from . import reproyeccion, seleccion
-from .patchcore import DetectorPatchCore
+from .patchcore import BancoMemoria, DetectorPatchCore
+from .reproyeccion import ReProyectorMapa
 from .segmentador import SegmentadorSAM
+from .seleccion import SelectorMascara
 
 log = logging.getLogger("samcore")
 
@@ -31,6 +33,26 @@ class TiempoAgotado(Exception):
     pass
 
 
+class ResultadoInferencia(TypedDict, total=False):
+    """Contrato de salida del motor (las claves con guion bajo no se
+    serializan: son los derivados que guarda el almacen)."""
+
+    categoria: str
+    puntuacion: float
+    umbral: float
+    veredicto: str
+    estado_roi: str
+    caja: dict[str, list[int]]
+    tam: list[int]
+    mascaras: int
+    regiones: list[dict[str, Any]]
+    tiempos_ms: dict[str, int]
+    motor: str
+    _mapa: np.ndarray
+    _recorte: Image.Image
+    _mapa_imagen: Image.Image
+
+
 def _elegir_dispositivo_y_precision() -> tuple[torch.device, str]:
     if not torch.cuda.is_available():
         return torch.device("cpu"), "fp32"
@@ -41,36 +63,34 @@ def _elegir_dispositivo_y_precision() -> tuple[torch.device, str]:
     return torch.device("cuda"), precision
 
 
-class Orquestador:
+class OrquestadorInferencia:
     def __init__(self) -> None:
         self.device, self.precision = _elegir_dispositivo_y_precision()
         self.estado = "sin_iniciar"  # sin_iniciar | cargando | listo | error
         self.error: str | None = None
-        self._sam: SegmentadorSAM | None = None
+        self._segmentador: SegmentadorSAM | None = None
+        self._selector = SelectorMascara()
         self._detector: DetectorPatchCore | None = None
-        self._bancos: dict[str, torch.Tensor] = {}
-        self._umbrales: dict[str, float] = {}
-        self._gpu = threading.Lock()
+        self._reproyector = ReProyectorMapa()
+        self._bancos: dict[str, BancoMemoria] = {}
         self._en_cola = 0
         self._cola_lock = threading.Lock()
+        # Un unico hilo ejecuta el pipeline: la GPU atiende una inspeccion a la vez
         self._ejecutor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="gpu")
 
     # ---- carga -----------------------------------------------------------
     def preparar_en_segundo_plano(self) -> None:
-        hilo = threading.Thread(target=self.preparar, name="carga-motor", daemon=True)
-        hilo.start()
+        threading.Thread(target=self.preparar, name="carga-motor", daemon=True).start()
 
     def preparar(self) -> None:
         self.estado = "cargando"
         try:
             t0 = time.perf_counter()
-            for categoria in artefactos.categorias_con_artefactos():
-                banco = artefactos.cargar_banco(categoria)
-                self._bancos[categoria] = torch.from_numpy(banco)
-                self._umbrales[categoria] = float(artefactos.calibracion(categoria)["umbral"])
+            for categoria in artefactos.GestorArtefactos.categorias():
+                self._bancos[categoria] = artefactos.GestorArtefactos.cargar_banco(categoria, self.device)
             self._detector = DetectorPatchCore(self.device)
-            self._sam = SegmentadorSAM(self.device, self.precision)
-            self._sam.cargar()
+            self._segmentador = SegmentadorSAM(self.device, self.precision)
+            self._segmentador.cargar()
             self.estado = "listo"
             log.info(
                 "evento=motor_listo categorias=%d device=%s precision=%s segundos=%.1f",
@@ -97,9 +117,9 @@ class Orquestador:
         return f"{torch.cuda.get_device_name(0)} ({self.precision})"
 
     # ---- inferencia -------------------------------------------------------
-    def inspeccionar(self, imagen: Image.Image, categoria: str) -> dict:
+    def inspeccionar(self, imagen: Image.Image, categoria: str) -> ResultadoInferencia:
         """Ejecuta el pipeline con concurrencia acotada. Lanza ColaLlena o
-        TiempoAgotado; el resultado incluye arreglos e imagenes derivadas."""
+        TiempoAgotado; el resultado incluye los derivados visuales."""
         if not self.soporta(categoria):
             raise RuntimeError(f"Categoria sin banco: {categoria}")
         with self._cola_lock:
@@ -117,39 +137,35 @@ class Orquestador:
             with self._cola_lock:
                 self._en_cola -= 1
 
-    def _pipeline(self, imagen: Image.Image, categoria: str) -> dict:
+    def _pipeline(self, imagen: Image.Image, categoria: str) -> ResultadoInferencia:
         imagen = imagen.convert("RGB")
         ancho, alto = imagen.size
-        arreglo = np.asarray(imagen)
+        banco = self._bancos[categoria]
 
         t0 = time.perf_counter()
-        mascaras = self._sam.segmentar(arreglo)
-        caja_sam, _seg, _meta, estado = seleccion.seleccionar(mascaras, imagen.size)
-        if caja_sam is None:
-            caja_sam = seleccion.caja_completa(imagen.size)
-        caja_roi = seleccion.expandir_caja(caja_sam, imagen.size)
-        recorte = reproyeccion.recortar(imagen, caja_roi)
+        mascaras = self._segmentador.segmentar(np.asarray(imagen))
+        caja_sam, _seg, _meta, estado = self._selector.seleccionar(mascaras, imagen.size)
+        caja_roi = self._selector.caja_definitiva(caja_sam, imagen.size)
+        recorte = self._reproyector.recortar(imagen, caja_roi)
         t1 = time.perf_counter()
 
-        caracteristicas = self._detector.incrustar(recorte)
-        puntuacion, mapa224 = self._detector.puntuar(caracteristicas, self._bancos[categoria])
+        puntuacion, mapa224 = self._detector.evaluar(recorte, banco)
         t2 = time.perf_counter()
 
-        umbral = self._umbrales[categoria]
-        mapa = reproyeccion.reproyectar(mapa224, caja_roi, (alto, ancho))
-        veredicto = "ANOMALO" if puntuacion > umbral else "NORMAL"
+        mapa = self._reproyector.reproyectar(mapa224, caja_roi, (alto, ancho))
+        veredicto = "ANOMALO" if puntuacion > banco.umbral else "NORMAL"
         t3 = time.perf_counter()
 
         return {
             "categoria": categoria,
             "puntuacion": round(puntuacion, 4),
-            "umbral": round(umbral, 4),
+            "umbral": round(banco.umbral, 4),
             "veredicto": veredicto,
             "estado_roi": estado,
-            "caja": {"sam": list(caja_sam), "roi": list(caja_roi)},
+            "caja": {"sam": list(caja_sam) if caja_sam is not None else list(caja_roi), "roi": list(caja_roi)},
             "tam": [ancho, alto],
             "mascaras": len(mascaras),
-            "regiones": reproyeccion.regiones_de(mapa, umbral),
+            "regiones": self._reproyector.regiones(mapa, banco.umbral),
             "tiempos_ms": {
                 "segmentacion": int((t1 - t0) * 1000),
                 "deteccion": int((t2 - t1) * 1000),
@@ -159,15 +175,17 @@ class Orquestador:
             "motor": "real",
             "_mapa": mapa,
             "_recorte": recorte,
-            "_mapa_imagen": reproyeccion.mapa_a_imagen(mapa, umbral),
+            "_mapa_imagen": self._reproyector.a_imagen(mapa, banco.umbral),
         }
 
 
-_instancia: Orquestador | None = None
+Orquestador = OrquestadorInferencia
+
+_instancia: OrquestadorInferencia | None = None
 
 
-def instancia() -> Orquestador:
+def instancia() -> OrquestadorInferencia:
     global _instancia
     if _instancia is None:
-        _instancia = Orquestador()
+        _instancia = OrquestadorInferencia()
     return _instancia

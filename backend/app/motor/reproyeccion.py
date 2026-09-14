@@ -78,3 +78,13 @@ def regiones_de(mapa: np.ndarray, umbral: float, maximo: int = 3) -> list[dict]:
         })
     regiones.sort(key=lambda r: -r["pico"])
     return regiones[:maximo]
+
+
+class ReProyectorMapa:
+    """Devuelve el mapa de la ROI a coordenadas de la imagen original y
+    produce los derivados visuales del informe."""
+
+    reproyectar = staticmethod(reproyectar)
+    recortar = staticmethod(recortar)
+    a_imagen = staticmethod(mapa_a_imagen)
+    regiones = staticmethod(regiones_de)
