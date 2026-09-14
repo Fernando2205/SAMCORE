@@ -1,38 +1,54 @@
-"""API del MVP de SamCore (FastAPI).
+"""API de SamCore (FastAPI).
 
-Contrato alineado con arquitectura_sistema.md §3.5 mas el delta de
-cuentas (D-11): login obligatorio, roles usuario/administrador, historial
-por usuario y estadisticas de uso. Motor de inferencia simulado
-(ver inferencia.py). Controles presentes en el MVP: listas cerradas
-(M-03), errores sin detalles internos (M-02), limitacion de tasa
-(M-01 / AM-11), rol verificado en el servidor (M-15), log con atribucion
-(M-09), sesiones con hash en BD (AM-12).
+Contrato de arquitectura_sistema.md §3.5 con cuentas (D-11), carga de imagen
+propia (D-17) y retencion controlada del informe (D-20). Controles:
+listas cerradas (M-03), errores sin detalles internos (M-02), limitacion de
+tasa y cola acotada a la GPU (M-01), topes por etapa (M-05), artefactos sin
+pickle y verificados por manifiesto (M-06/M-07), log con atribucion (M-09),
+autenticacion y sesiones (M-10/M-11), historial filtrado por sesion (M-12),
+rol verificado en servidor (M-15), ingesta segura (M-16) y retencion
+controlada (M-17).
 """
 import logging
+import os
 import re
 import secrets
 import sqlite3
 from contextlib import asynccontextmanager
+from io import BytesIO
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from PIL import Image
 from pydantic import BaseModel
 
-from . import db, galeria, inferencia, seguridad
+from . import almacen, artefactos, db, galeria, inferencia, ingesta, seguridad
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("samcore")
+
+MODO_MOTOR = os.environ.get("SAMCORE_MOTOR", "auto")  # auto | real | simulado
+COOKIE_SEGURA = os.environ.get("SAMCORE_HTTPS", "0") == "1"
+RUTA_FRONTEND = Path(os.environ.get("SAMCORE_FRONTEND", Path(__file__).resolve().parents[2] / "frontend" / "dist"))
 
 
 @asynccontextmanager
 async def _ciclo_vida(app: FastAPI):
     db.iniciar()
+    galeria.escanear()
+    if MODO_MOTOR != "simulado" and artefactos.categorias_con_artefactos():
+        from .motor import orquestador
+
+        orquestador.instancia().preparar_en_segundo_plano()
     yield
 
 
-app = FastAPI(title="SamCore API", version="0.1.0", docs_url=None, redoc_url=None, lifespan=_ciclo_vida)
+app = FastAPI(title="SamCore API", version="1.0.0", docs_url=None, redoc_url=None, lifespan=_ciclo_vida)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,8 +58,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _cabeceras_seguridad(request: Request, call_next):
+    respuesta = await call_next(request)
+    respuesta.headers["X-Content-Type-Options"] = "nosniff"
+    respuesta.headers["X-Frame-Options"] = "DENY"
+    respuesta.headers["Referrer-Policy"] = "same-origin"
+    if request.url.path.startswith("/api") and "image/" not in respuesta.headers.get("content-type", ""):
+        respuesta.headers["Cache-Control"] = "no-store"
+    return respuesta
+
+
 UsuarioActual = Annotated[sqlite3.Row, Depends(seguridad.usuario_actual)]
 _RE_CORREO = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+_RE_NOMBRE_ARCHIVO = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 @app.exception_handler(HTTPException)
@@ -90,44 +119,56 @@ def _publico(usuario: sqlite3.Row) -> dict:
     return {"correo": usuario["correo"], "rol": usuario["rol"]}
 
 
+# ---------------------------------------------------------------- salud ---
 @app.get("/api/salud")
 def salud() -> dict:
-    from . import artefactos
+    con_artefactos = artefactos.categorias_con_artefactos()
+    motor, gpu = "simulado", "no aplica"
+    if MODO_MOTOR != "simulado" and con_artefactos:
+        from .motor import orquestador
 
-    con_artefactos = [c for c in galeria.CATEGORIAS if artefactos.disponibles(c)]
+        instancia = orquestador.instancia()
+        motor = "real" if instancia.listo else instancia.estado
+        gpu = instancia.descripcion_gpu()
     return {
         "estado": "ok",
-        "motor": "simulado",
+        "motor": motor,
         "categorias_con_artefactos": con_artefactos,
-        "gpu": "no aplica (MVP)",
+        "gpu": gpu,
+        "carga_propia": True,
     }
 
 
+# --------------------------------------------------------------- cuentas ---
 @app.post("/api/auth/registro", status_code=201)
 def registro(datos: DatosRegistro, request: Request) -> dict:
     if not seguridad.limitador_registro.permitir(_ip(request)):
         raise HTTPException(429, {"error": "limite", "mensaje": "Demasiadas solicitudes. Espera un momento."})
     correo = datos.correo.strip().lower()
-    if not _RE_CORREO.match(correo):
+    if not _RE_CORREO.match(correo) or len(correo) > 254:
         raise HTTPException(422, {"error": "correo_invalido", "mensaje": "Ingresa un correo válido."})
-    if len(datos.contrasena) < 10:
+    if len(datos.contrasena) < 10 or len(datos.contrasena) > 200:
         raise HTTPException(422, {"error": "contrasena_corta", "mensaje": "La contraseña debe tener al menos 10 caracteres."})
     if datos.contrasena != datos.confirmacion:
         raise HTTPException(422, {"error": "no_coinciden", "mensaje": "Las contraseñas no coinciden."})
     sal, hash_c = seguridad.hashear_contrasena(datos.contrasena)
     con = db.conectar()
     try:
-        con.execute(
-            "INSERT INTO usuarios (correo, hash_contrasena, sal) VALUES (?, ?, ?)",
-            (correo, hash_c, sal),
-        )
+        con.execute("INSERT INTO usuarios (correo, hash_contrasena, sal) VALUES (?, ?, ?)", (correo, hash_c, sal))
         con.commit()
     except sqlite3.IntegrityError:
         raise HTTPException(409, {"error": "correo_en_uso", "mensaje": "Ese correo ya tiene una solicitud o cuenta."})
     finally:
         con.close()
-    log.info("evento=registro correo=%s estado=pendiente", correo)
+    log.info("evento=registro usuario=%s estado=pendiente", _anonimo(correo))
     return {"mensaje": "Solicitud registrada. Podrás entrar cuando el operador la apruebe."}
+
+
+def _anonimo(correo: str) -> str:
+    """Identificador estable sin exponer el correo en el log (M-09)."""
+    import hashlib
+
+    return hashlib.sha256(correo.encode("utf-8")).hexdigest()[:10]
 
 
 @app.post("/api/auth/login")
@@ -142,7 +183,7 @@ def login(datos: DatosLogin, request: Request, response: Response) -> dict:
             datos.contrasena, usuario["sal"], usuario["hash_contrasena"]
         )
         if not credenciales_ok:
-            log.info("evento=login_fallido correo=%s", correo)
+            log.info("evento=login_fallido usuario=%s", _anonimo(correo))
             raise HTTPException(401, {"error": "credenciales", "mensaje": "Correo o contraseña incorrectos."})
         if usuario["estado"] == "pendiente":
             raise HTTPException(403, {"error": "pendiente", "mensaje": "Tu solicitud sigue pendiente de aprobación por el operador."})
@@ -152,13 +193,10 @@ def login(datos: DatosLogin, request: Request, response: Response) -> dict:
     finally:
         con.close()
     response.set_cookie(
-        seguridad.COOKIE_SESION,
-        token,
-        max_age=seguridad.DURACION_SESION_S,
-        httponly=True,
-        samesite="lax",
+        seguridad.COOKIE_SESION, token, max_age=seguridad.DURACION_SESION_S,
+        httponly=True, samesite="lax", secure=COOKIE_SEGURA, path="/",
     )
-    log.info("evento=login correo=%s rol=%s", correo, usuario["rol"])
+    log.info("evento=login usuario=%s rol=%s", _anonimo(correo), usuario["rol"])
     return _publico(usuario)
 
 
@@ -171,7 +209,7 @@ def logout(request: Request, response: Response) -> dict:
             seguridad.borrar_sesion(con, token)
         finally:
             con.close()
-    response.delete_cookie(seguridad.COOKIE_SESION)
+    response.delete_cookie(seguridad.COOKIE_SESION, path="/")
     return {"mensaje": "Sesión cerrada."}
 
 
@@ -180,50 +218,155 @@ def sesion(usuario: UsuarioActual) -> dict:
     return _publico(usuario)
 
 
+# --------------------------------------------------------------- galeria ---
 @app.get("/api/categorias")
 def categorias(usuario: UsuarioActual) -> list[dict]:
     return galeria.listar_categorias()
 
 
+def _validar_categoria(categoria: str) -> None:
+    if not galeria.es_categoria_valida(categoria):
+        raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría no soportada."})
+
+
 @app.get("/api/galeria/{categoria}")
 def imagenes(categoria: str, usuario: UsuarioActual) -> dict:
-    if categoria not in galeria.CATEGORIAS:
-        raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría no soportada."})
-    return {
-        "categoria": categoria,
-        "umbral": galeria.umbral_de(categoria),
-        "imagenes": galeria.listar_imagenes(categoria),
+    _validar_categoria(categoria)
+    return {"categoria": categoria, "umbral": galeria.umbral_de(categoria), "imagenes": galeria.listar_imagenes(categoria)}
+
+
+@app.get("/api/galeria/{categoria}/imagen/{imagen_id:path}")
+def imagen_galeria(categoria: str, imagen_id: str, usuario: UsuarioActual) -> FileResponse:
+    ruta = galeria.ruta_imagen(categoria, imagen_id) if galeria.es_categoria_valida(categoria) else None
+    if ruta is None:
+        raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría o imagen fuera de la galería."})
+    return FileResponse(ruta, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
+
+
+# ------------------------------------------------------------- inferencia ---
+def _ejecutar_motor(imagen: Image.Image, categoria: str, clave: str) -> dict:
+    if MODO_MOTOR != "simulado":
+        from .motor import orquestador
+
+        motor = orquestador.instancia()
+        if motor.soporta(categoria):
+            try:
+                return motor.inspeccionar(imagen, categoria)
+            except orquestador.ColaLlena:
+                raise HTTPException(503, {"error": "ocupado", "mensaje": "La GPU está atendiendo otras inspecciones. Intenta de nuevo en unos segundos."})
+            except orquestador.TiempoAgotado:
+                raise HTTPException(503, {"error": "tiempo", "mensaje": "La inspección tardó más de lo permitido y se canceló. Intenta con otra imagen."})
+        if artefactos.disponibles(categoria) and motor.estado in ("sin_iniciar", "cargando"):
+            raise HTTPException(503, {"error": "motor_cargando", "mensaje": "El motor de inferencia está arrancando. Intenta de nuevo en un minuto."})
+        if MODO_MOTOR == "real":
+            raise HTTPException(503, {"error": "motor", "mensaje": "El motor de inferencia no está disponible para esta categoría."})
+    return inferencia.inspeccionar(imagen, categoria, clave)
+
+
+def _exigir_banco(categoria: str) -> None:
+    if MODO_MOTOR != "simulado" and not artefactos.disponibles(categoria):
+        raise HTTPException(422, {"error": "sin_banco", "mensaje": "Esta categoría no tiene banco de memoria preparado."})
+
+
+def _limitar_inspeccion(usuario: sqlite3.Row) -> None:
+    if not seguridad.limitador_inspeccion.permitir(str(usuario["id"])):
+        raise HTTPException(429, {"error": "limite", "mensaje": "Has alcanzado el límite de inspecciones por minuto. Espera un momento."})
+
+
+def _registrar(usuario: sqlite3.Row, resultado: dict, imagen_id: str, origen: str, original: Image.Image | None) -> dict:
+    con = db.conectar()
+    try:
+        cur = con.execute(
+            "INSERT INTO inspecciones (usuario_id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms, origen, motor) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                usuario["id"], resultado["categoria"], imagen_id, resultado["puntuacion"], resultado["umbral"],
+                resultado["veredicto"], resultado["estado_roi"], resultado["tiempos_ms"]["total"], origen, resultado["motor"],
+            ),
+        )
+        con.commit()
+        inspeccion_id = int(cur.lastrowid)
+    finally:
+        con.close()
+    resultado = dict(resultado)
+    resultado.update({"id": inspeccion_id, "imagen_id": imagen_id, "origen": origen})
+    almacen.guardar(inspeccion_id, resultado, original)
+    log.info(
+        "evento=inspeccion usuario=%s id=%s categoria=%s origen=%s veredicto=%s roi=%s motor=%s total_ms=%s",
+        _anonimo(usuario["correo"]), inspeccion_id, resultado["categoria"], origen,
+        resultado["veredicto"], resultado["estado_roi"], resultado["motor"], resultado["tiempos_ms"]["total"],
+    )
+    return _respuesta(resultado)
+
+
+def _respuesta(informe: dict) -> dict:
+    """Informe publico con las URL de sus imagenes."""
+    publico = {k: v for k, v in informe.items() if not k.startswith("_")}
+    inspeccion_id, categoria = publico["id"], publico["categoria"]
+    if publico.get("origen") == "propia":
+        original = f"/api/historial/{inspeccion_id}/imagen/original"
+    else:
+        original = f"/api/galeria/{categoria}/imagen/{publico['imagen_id']}"
+    publico["imagenes"] = {
+        "original": original,
+        "roi": f"/api/historial/{inspeccion_id}/imagen/roi",
+        "mapa": f"/api/historial/{inspeccion_id}/imagen/mapa",
     }
+    return publico
 
 
 @app.post("/api/inspeccionar")
 def inspeccionar(datos: DatosInspeccion, usuario: UsuarioActual) -> dict:
-    if not galeria.es_imagen_valida(datos.categoria, datos.imagen_id):
+    ruta = galeria.ruta_imagen(datos.categoria, datos.imagen_id) if galeria.es_categoria_valida(datos.categoria) else None
+    if ruta is None:
         raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría o imagen fuera de la galería."})
-    if not seguridad.limitador_inspeccion.permitir(str(usuario["id"])):
-        raise HTTPException(429, {"error": "limite", "mensaje": "La GPU está atendiendo otras inspecciones. Intenta de nuevo en unos segundos."})
-    resultado = inferencia.inspeccionar(datos.categoria, datos.imagen_id)
-    con = db.conectar()
+    _exigir_banco(datos.categoria)
+    _limitar_inspeccion(usuario)
+    with Image.open(ruta) as imagen:
+        imagen = imagen.convert("RGB")
+    resultado = _ejecutar_motor(imagen, datos.categoria, datos.imagen_id)
+    return _registrar(usuario, resultado, datos.imagen_id, "galeria", None)
+
+
+@app.post("/api/inspeccionar/propia")
+async def inspeccionar_propia(
+    request: Request,
+    usuario: UsuarioActual,
+    categoria: Annotated[str, Form()],
+    archivo: Annotated[UploadFile, File()],
+) -> dict:
+    _validar_categoria(categoria)
+    _exigir_banco(categoria)
+    declarado = request.headers.get("content-length")
+    if declarado and declarado.isdigit() and int(declarado) > ingesta.MAX_BYTES + 4096:
+        raise HTTPException(413, {"error": "tamano", "mensaje": "La imagen supera el tamaño máximo de 8 MB."})
+    _limitar_inspeccion(usuario)
+    datos = bytearray()
+    while True:
+        trozo = await archivo.read(1 << 20)
+        if not trozo:
+            break
+        datos.extend(trozo)
+        if len(datos) > ingesta.MAX_BYTES:
+            raise HTTPException(413, {"error": "tamano", "mensaje": "La imagen supera el tamaño máximo de 8 MB."})
     try:
-        cur = con.execute(
-            "INSERT INTO inspecciones (usuario_id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                usuario["id"], resultado["categoria"], resultado["imagen_id"],
-                resultado["puntuacion"], resultado["umbral"], resultado["veredicto"],
-                resultado["estado_roi"], resultado["tiempos_ms"]["total"],
-            ),
-        )
-        con.commit()
-        resultado["id"] = cur.lastrowid
-    finally:
-        con.close()
-    log.info(
-        "evento=inspeccion usuario=%s categoria=%s imagen=%s veredicto=%s roi=%s",
-        usuario["correo"], datos.categoria, datos.imagen_id,
-        resultado["veredicto"], resultado["estado_roi"],
-    )
-    return resultado
+        imagen = await run_in_threadpool(ingesta.ingerir, bytes(datos))
+    except ingesta.ImagenRechazada as exc:
+        raise HTTPException(422, {"error": exc.codigo, "mensaje": exc.mensaje})
+    nombre = _RE_NOMBRE_ARCHIVO.sub("_", (archivo.filename or "imagen"))[:60] or "imagen"
+    clave = f"propia/{nombre}"
+    resultado = await run_in_threadpool(_ejecutar_motor, imagen, categoria, clave)
+    return await run_in_threadpool(_registrar, usuario, resultado, clave, "propia", imagen)
+
+
+# -------------------------------------------------------------- historial ---
+def _fila_propia(con: sqlite3.Connection, inspeccion_id: int, usuario: sqlite3.Row) -> sqlite3.Row:
+    fila = con.execute(
+        "SELECT * FROM inspecciones WHERE id = ? AND usuario_id = ?", (inspeccion_id, usuario["id"])
+    ).fetchone()
+    if fila is None:
+        raise HTTPException(404, {"error": "no_encontrada", "mensaje": "Esa inspección no existe en tu historial."})
+    return fila
 
 
 @app.get("/api/historial")
@@ -231,7 +374,7 @@ def historial(usuario: UsuarioActual) -> list[dict]:
     con = db.conectar()
     try:
         filas = con.execute(
-            "SELECT id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms, creada_en "
+            "SELECT id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms, creada_en, origen, motor "
             "FROM inspecciones WHERE usuario_id = ? ORDER BY creada_en DESC, id DESC LIMIT 200",
             (usuario["id"],),
         ).fetchall()
@@ -240,31 +383,70 @@ def historial(usuario: UsuarioActual) -> list[dict]:
     return [dict(f) for f in filas]
 
 
+@app.get("/api/historial/{inspeccion_id}/informe")
+def informe(inspeccion_id: int, usuario: UsuarioActual) -> dict:
+    con = db.conectar()
+    try:
+        fila = _fila_propia(con, inspeccion_id, usuario)
+    finally:
+        con.close()
+    datos = almacen.cargar_informe(inspeccion_id)
+    if datos is None:
+        raise HTTPException(404, {"error": "sin_informe", "mensaje": "El informe de esa inspección ya no está disponible."})
+    datos.update({"id": fila["id"], "imagen_id": fila["imagen_id"], "origen": fila["origen"], "creada_en": fila["creada_en"]})
+    return _respuesta(datos)
+
+
+@app.get("/api/historial/{inspeccion_id}/imagen/{clase}")
+def imagen_informe(inspeccion_id: int, clase: str, usuario: UsuarioActual) -> FileResponse:
+    if clase not in almacen.CLASES:
+        raise HTTPException(422, {"error": "parametros", "mensaje": "Imagen no reconocida."})
+    con = db.conectar()
+    try:
+        _fila_propia(con, inspeccion_id, usuario)
+    finally:
+        con.close()
+    ruta = almacen.ruta_derivado(inspeccion_id, clase)
+    if ruta is None:
+        raise HTTPException(404, {"error": "sin_imagen", "mensaje": "Esa imagen ya no está disponible."})
+    return FileResponse(ruta, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.delete("/api/historial/{inspeccion_id}")
+def borrar_inspeccion(inspeccion_id: int, usuario: UsuarioActual) -> dict:
+    con = db.conectar()
+    try:
+        _fila_propia(con, inspeccion_id, usuario)
+        con.execute("DELETE FROM inspecciones WHERE id = ? AND usuario_id = ?", (inspeccion_id, usuario["id"]))
+        con.commit()
+    finally:
+        con.close()
+    almacen.borrar(inspeccion_id)
+    log.info("evento=inspeccion_borrada usuario=%s id=%s", _anonimo(usuario["correo"]), inspeccion_id)
+    return {"id": inspeccion_id, "borrada": True}
+
+
+# ------------------------------------------------------------ estadisticas ---
 def _p95(valores: list[int]) -> int:
     if not valores:
         return 0
     ordenados = sorted(valores)
-    indice = min(len(ordenados) - 1, round(0.95 * (len(ordenados) - 1)))
-    return ordenados[indice]
+    return ordenados[min(len(ordenados) - 1, round(0.95 * (len(ordenados) - 1)))]
 
 
 @app.get("/api/estadisticas")
 def estadisticas(usuario: UsuarioActual) -> dict:
     con = db.conectar()
     try:
-        filas = con.execute(
-            "SELECT categoria, veredicto, estado_roi, duracion_ms FROM inspecciones"
-        ).fetchall()
-        usuarios_activos = con.execute(
-            "SELECT COUNT(*) FROM usuarios WHERE estado = 'activo'"
-        ).fetchone()[0]
+        filas = con.execute("SELECT categoria, veredicto, estado_roi, duracion_ms, origen FROM inspecciones").fetchall()
+        usuarios_activos = con.execute("SELECT COUNT(*) FROM usuarios WHERE estado = 'activo'").fetchone()[0]
     finally:
         con.close()
     total = len(filas)
     anomalas = sum(1 for f in filas if f["veredicto"] == "ANOMALO")
     degradadas = sum(1 for f in filas if f["estado_roi"] == "ROI_DEGRADADA")
     por_categoria = []
-    for nombre in galeria.CATEGORIAS:
+    for nombre in galeria.CATEGORIAS_MVTEC:
         propias = [f for f in filas if f["categoria"] == nombre]
         if not propias:
             continue
@@ -279,6 +461,7 @@ def estadisticas(usuario: UsuarioActual) -> dict:
     return {
         "total": total,
         "anomalas": anomalas,
+        "propias": sum(1 for f in filas if f["origen"] == "propia"),
         "pct_anomalas": round(100 * anomalas / total, 1) if total else 0.0,
         "pct_roi_degradada": round(100 * degradadas / total, 1) if total else 0.0,
         "p95_ms": _p95([f["duracion_ms"] for f in filas]),
@@ -287,6 +470,7 @@ def estadisticas(usuario: UsuarioActual) -> dict:
     }
 
 
+# --------------------------------------------------------- administracion ---
 @app.get("/api/admin/usuarios")
 def admin_usuarios(usuario: UsuarioActual) -> list[dict]:
     seguridad.requiere_admin(usuario)
@@ -335,6 +519,20 @@ def admin_cambiar_estado(usuario_id: int, datos: DatosEstadoUsuario, usuario: Us
         con.close()
     log.info(
         "evento=admin_estado admin=%s objetivo=%s accion=%s nuevo_estado=%s",
-        usuario["correo"], objetivo["correo"], datos.accion, hacia,
+        _anonimo(usuario["correo"]), _anonimo(objetivo["correo"]), datos.accion, hacia,
     )
     return {"id": usuario_id, "estado": hacia}
+
+
+# ---------------------------------------------------------------- frontend ---
+if RUTA_FRONTEND.is_dir():
+    app.mount("/assets", StaticFiles(directory=RUTA_FRONTEND / "assets"), name="assets")
+
+    @app.get("/{ruta:path}", include_in_schema=False)
+    def _spa(ruta: str) -> FileResponse:
+        if ruta.startswith("api/"):
+            raise HTTPException(404, {"error": "no_encontrado", "mensaje": "Recurso no encontrado."})
+        candidato = (RUTA_FRONTEND / ruta).resolve()
+        if ruta and candidato.is_file() and RUTA_FRONTEND.resolve() in candidato.parents:
+            return FileResponse(candidato)
+        return FileResponse(RUTA_FRONTEND / "index.html")

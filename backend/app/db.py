@@ -1,8 +1,5 @@
-"""Base de datos SQLite del MVP.
-
-Elección provisional (D-15): SQLite basta para el MVP local; el despliegue
-en el Space necesitará almacenamiento persistente o una BD externa
-(pendiente de decidir, ver modelo_amenazas.md AM-15).
+"""Base de datos SQLite de la aplicacion (ADR-09): modo WAL sobre el
+almacenamiento persistente, escrituras transaccionales, claves foraneas.
 """
 import logging
 import os
@@ -42,28 +39,47 @@ CREATE TABLE IF NOT EXISTS inspecciones (
   veredicto TEXT NOT NULL,
   estado_roi TEXT NOT NULL,
   duracion_ms INTEGER NOT NULL,
-  creada_en TEXT NOT NULL DEFAULT (datetime('now'))
+  creada_en TEXT NOT NULL DEFAULT (datetime('now')),
+  origen TEXT NOT NULL DEFAULT 'galeria',
+  motor TEXT NOT NULL DEFAULT 'simulado'
 );
 CREATE INDEX IF NOT EXISTS idx_inspecciones_usuario ON inspecciones(usuario_id, creada_en);
 """
 
+# Columnas agregadas despues de la primera version del esquema
+_COLUMNAS_NUEVAS = {
+    "inspecciones": {
+        "origen": "TEXT NOT NULL DEFAULT 'galeria'",
+        "motor": "TEXT NOT NULL DEFAULT 'simulado'",
+    },
+}
+
 
 def conectar() -> sqlite3.Connection:
-    con = sqlite3.connect(RUTA_BD)
+    con = sqlite3.connect(RUTA_BD, timeout=10)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     return con
 
 
+def _migrar(con: sqlite3.Connection) -> None:
+    for tabla, columnas in _COLUMNAS_NUEVAS.items():
+        existentes = {fila["name"] for fila in con.execute(f"PRAGMA table_info({tabla})")}
+        for nombre, definicion in columnas.items():
+            if nombre not in existentes:
+                con.execute(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {definicion}")
+
+
 def iniciar() -> None:
     from . import seguridad
 
+    RUTA_BD.parent.mkdir(parents=True, exist_ok=True)
     con = conectar()
     try:
+        con.execute("PRAGMA journal_mode = WAL")
         con.executescript(ESQUEMA)
-        hay_admin = con.execute(
-            "SELECT 1 FROM usuarios WHERE rol = 'administrador' LIMIT 1"
-        ).fetchone()
+        _migrar(con)
+        hay_admin = con.execute("SELECT 1 FROM usuarios WHERE rol = 'administrador' LIMIT 1").fetchone()
         if not hay_admin:
             correo = os.environ.get("SAMCORE_ADMIN_CORREO", "admin@samcore.local")
             contrasena = os.environ.get("SAMCORE_ADMIN_CONTRASENA") or secrets.token_urlsafe(9)
@@ -74,13 +90,14 @@ def iniciar() -> None:
                 (correo, hash_c, sal),
             )
             con.commit()
-            RUTA_CREDENCIAL_INICIAL.write_text(
-                "Cuenta de administrador inicial de SamCore (solo desarrollo).\n"
-                f"Correo: {correo}\nContrasena: {contrasena}\n"
-                "Borra este archivo despues del primer inicio de sesion.\n",
-                encoding="utf-8",
-            )
-            log.info("evento=bootstrap_admin correo=%s credencial=%s", correo, RUTA_CREDENCIAL_INICIAL)
+            if not os.environ.get("SAMCORE_ADMIN_CONTRASENA"):
+                RUTA_CREDENCIAL_INICIAL.write_text(
+                    "Cuenta de administrador inicial de SamCore (solo desarrollo).\n"
+                    f"Correo: {correo}\nContrasena: {contrasena}\n"
+                    "Borra este archivo despues del primer inicio de sesion.\n",
+                    encoding="utf-8",
+                )
+            log.info("evento=bootstrap_admin correo=%s", correo)
         con.commit()
     finally:
         con.close()

@@ -1,28 +1,42 @@
 """Galeria cerrada (ADR-08): listas cerradas de categorias e imagenes.
 
-Todo parametro de entrada se valida contra estas listas (M-03); no hay
-carga de archivos ni rutas construidas con texto del cliente. Los ids
-imitan la estructura de MVTec AD; en el MVP son marcadores de posicion y
-el servidor aun no sirve las imagenes reales (costura pendiente para T6).
-Los umbrales por categoria son ilustrativos salvo capsule (3.417, valor
-del diseno); los reales saldran del calibrador (ADR-07).
+Las imagenes viven en `backend/galeria/<categoria>/<tipo>/<archivo>.png`
+(subconjunto del conjunto de prueba de MVTec AD, ver README de la carpeta).
+Al arrancar se construye el mapa identificador -> ruta; todo parametro del
+cliente se valida contra ese mapa y ninguna ruta se construye con texto del
+cliente (M-03).
 """
+import os
+from pathlib import Path
 
-CATEGORIAS: dict[str, dict] = {
-    "bottle": {"umbral": 3.664, "defectos": ["broken_large", "broken_small", "contamination"]},
-    "cable": {"umbral": 3.512, "defectos": ["bent_wire", "cable_swap", "cut_outer_insulation", "missing_cable"]},
-    "capsule": {"umbral": 3.417, "defectos": ["crack", "faulty_imprint", "poke", "scratch", "squeeze"]},
-    "hazelnut": {"umbral": 3.290, "defectos": ["crack", "cut", "hole", "print"]},
-    "metal_nut": {"umbral": 3.845, "defectos": ["bent", "color", "flip", "scratch"]},
-    "pill": {"umbral": 3.201, "defectos": ["color", "contamination", "crack", "faulty_imprint", "scratch"]},
-    "screw": {"umbral": 3.105, "defectos": ["manipulated_front", "scratch_head", "scratch_neck", "thread_side", "thread_top"]},
-    "toothbrush": {"umbral": 3.038, "defectos": ["defective"]},
-    "transistor": {"umbral": 3.577, "defectos": ["bent_lead", "cut_lead", "damaged_case", "misplaced"]},
-    "zipper": {"umbral": 3.882, "defectos": ["broken_teeth", "fabric_border", "rough", "split_teeth"]},
+CATEGORIAS_MVTEC = (
+    "bottle", "cable", "capsule", "hazelnut", "metal_nut",
+    "pill", "screw", "toothbrush", "transistor", "zipper",
+)
+
+# Solo para el motor simulado (desarrollo y pruebas): umbrales ilustrativos.
+UMBRALES_ILUSTRATIVOS = {
+    "bottle": 2.772, "cable": 3.512, "capsule": 1.925, "hazelnut": 4.334, "metal_nut": 3.845,
+    "pill": 2.911, "screw": 2.055, "toothbrush": 1.910, "transistor": 3.232, "zipper": 1.314,
 }
 
-_IMAGENES_POR_TIPO = 2
-_IMAGENES_BUENAS = 6
+RUTA_GALERIA = Path(os.environ.get("SAMCORE_GALERIA", Path(__file__).resolve().parent.parent / "galeria"))
+_EXTENSIONES = {".png", ".jpg", ".jpeg"}
+
+_mapa: dict[str, dict[str, Path]] = {}
+
+
+def escanear() -> None:
+    """Construye el mapa cerrado id -> ruta a partir de la carpeta."""
+    _mapa.clear()
+    for categoria in CATEGORIAS_MVTEC:
+        carpeta = RUTA_GALERIA / categoria
+        entradas: dict[str, Path] = {}
+        if carpeta.is_dir():
+            for tipo_dir in sorted(p for p in carpeta.iterdir() if p.is_dir()):
+                for archivo in sorted(p for p in tipo_dir.iterdir() if p.suffix.lower() in _EXTENSIONES):
+                    entradas[f"{tipo_dir.name}/{archivo.name}"] = archivo
+        _mapa[categoria] = entradas
 
 
 def umbral_de(categoria: str) -> float:
@@ -30,7 +44,7 @@ def umbral_de(categoria: str) -> float:
     from . import artefactos
 
     calibrado = artefactos.umbral_calibrado(categoria)
-    return calibrado if calibrado is not None else CATEGORIAS[categoria]["umbral"]
+    return calibrado if calibrado is not None else UMBRALES_ILUSTRATIVOS[categoria]
 
 
 def listar_categorias() -> list[dict]:
@@ -43,17 +57,21 @@ def listar_categorias() -> list[dict]:
             "imagenes": len(listar_imagenes(nombre)),
             **artefactos.estado_categoria(nombre),
         }
-        for nombre in CATEGORIAS
+        for nombre in CATEGORIAS_MVTEC
     ]
 
 
 def listar_imagenes(categoria: str) -> list[str]:
-    datos = CATEGORIAS[categoria]
-    ids = [f"good/{i:03d}.png" for i in range(_IMAGENES_BUENAS)]
-    for defecto in datos["defectos"]:
-        ids.extend(f"{defecto}/{i:03d}.png" for i in range(_IMAGENES_POR_TIPO))
-    return ids
+    return list(_mapa.get(categoria, {}).keys())
+
+
+def ruta_imagen(categoria: str, imagen_id: str) -> Path | None:
+    return _mapa.get(categoria, {}).get(imagen_id)
+
+
+def es_categoria_valida(categoria: str) -> bool:
+    return categoria in CATEGORIAS_MVTEC
 
 
 def es_imagen_valida(categoria: str, imagen_id: str) -> bool:
-    return categoria in CATEGORIAS and imagen_id in listar_imagenes(categoria)
+    return ruta_imagen(categoria, imagen_id) is not None
