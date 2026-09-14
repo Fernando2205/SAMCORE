@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api } from '../api'
 import type { Estadisticas, EstadisticaCategoria, IntervaloHistograma, MetricasExperimento, ParMetrica } from '../api'
 
@@ -15,6 +15,29 @@ const fmt = (n: number, dec = 0) => n.toLocaleString('es-CO', { maximumFractionD
 const fmtMs = (ms: number | null) => (ms === null ? '—' : ms >= 1000 ? `${fmt(ms / 1000, 1)} s` : `${fmt(ms)} ms`)
 
 const retraso = (ms: number): React.CSSProperties => ({ '--retraso': `${ms}ms` } as React.CSSProperties)
+
+/** True la primera vez que el elemento entra en pantalla; las animaciones esperan a ese momento. */
+function useEnVista<T extends HTMLElement> (): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T | null>(null)
+  const [visto, setVisto] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (el === null || visto) return
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisto(true)
+      return
+    }
+    const observador = new IntersectionObserver(entradas => {
+      if (entradas.some(e => e.isIntersecting)) {
+        setVisto(true)
+        observador.disconnect()
+      }
+    }, { threshold: 0.15 })
+    observador.observe(el)
+    return () => observador.disconnect()
+  }, [visto])
+  return [ref, visto]
+}
 
 /** Cuenta de 0 al valor con una curva suave; sin animación si el sistema pide menos movimiento. */
 function useContador (valor: number, duracion = 900): number {
@@ -369,10 +392,12 @@ function Kpi ({ rotulo, valor, formato, detalle, orden = 0 }: {
 }
 
 function Tarjeta ({ titulo, nota, children, ancha, orden = 0 }: { titulo: string, nota: string, children: React.ReactNode, ancha?: boolean, orden?: number }) {
+  const [ref, visto] = useEnVista<HTMLElement>()
   return (
     <section
-      className={`anim-aparecer mt-4 flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'}`}
-      style={retraso(150 + orden * 120)}
+      ref={ref}
+      className={`anim-aparecer mt-4 flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'} ${visto ? '' : 'anim-espera'}`}
+      style={retraso(100 + orden * 90)}
     >
       <h2 className='font-serif text-[19px]'>{titulo}</h2>
       <p className='mt-0.5 text-[12px] text-texto-3'>{nota}</p>
@@ -414,42 +439,6 @@ export function PaginaEstadisticas () {
         <span className='font-mono text-[12px] text-texto-2'>{datos.usuarios_activos} cuentas activas</span>
       </div>
 
-      {metricas !== null && (
-        <Tarjeta
-          orden={1}
-          titulo='Evaluación del experimento'
-          nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con anotaciones de referencia, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
-        >
-          <div className='mt-4'>
-            <TablaMetricas datos={metricas} />
-            <p className='mt-3 text-[12px] leading-relaxed text-texto-3'>
-              Base: PatchCore sobre la imagen completa. ROI: PatchCore sobre la región segmentada por SAM. En rojo, las
-              caídas de dos centésimas o más respecto de la base. Pasa el cursor por el nombre de cada métrica para ver su
-              definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
-              máscaras de referencia del conjunto de datos.
-            </p>
-            <details className='mt-3 border border-hairline bg-papel px-4 py-3'>
-              <summary className='cursor-pointer text-[13px] font-semibold text-tinta'>Cómo leer las cuatro métricas</summary>
-              <dl className='mt-3 grid grid-cols-[170px_1fr] gap-x-4 gap-y-2.5 text-[12.5px] leading-relaxed'>
-                {DEFINICIONES.map(d => (
-                  <div key={d.clave} className='contents'>
-                    <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>{d.nombre}</dt>
-                    <dd className='text-texto-2'>{d.texto}</dd>
-                  </div>
-                ))}
-                <div className='contents'>
-                  <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>Por qué difieren</dt>
-                  <dd className='text-texto-2'>
-                    Las dos variantes dentro del recorte solo ven lo que la ROI contiene, así que pueden verse bien aunque
-                    la ROI haya dejado el defecto fuera. La re-proyectada devuelve el mapa a la imagen original y cuenta
-                    esa exclusión como puntuación cero; por eso es la que baja en transistor, bottle, cable y metal_nut.
-                  </dd>
-                </div>
-              </dl>
-            </details>
-          </div>
-        </Tarjeta>
-      )}
 
       {datos.total === 0
         ? (
@@ -513,6 +502,42 @@ export function PaginaEstadisticas () {
             </div>
           </>
           )}
+      {metricas !== null && (
+        <Tarjeta
+          orden={6}
+          titulo='Evaluación del experimento'
+          nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con anotaciones de referencia, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
+        >
+          <div className='mt-4'>
+            <TablaMetricas datos={metricas} />
+            <p className='mt-3 text-[12px] leading-relaxed text-texto-3'>
+              Base: PatchCore sobre la imagen completa. ROI: PatchCore sobre la región segmentada por SAM. En rojo, las
+              caídas de dos centésimas o más respecto de la base. Pasa el cursor por el nombre de cada métrica para ver su
+              definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
+              máscaras de referencia del conjunto de datos.
+            </p>
+            <details className='mt-3 border border-hairline bg-papel px-4 py-3'>
+              <summary className='cursor-pointer text-[13px] font-semibold text-tinta'>Cómo leer las cuatro métricas</summary>
+              <dl className='mt-3 grid grid-cols-[170px_1fr] gap-x-4 gap-y-2.5 text-[12.5px] leading-relaxed'>
+                {DEFINICIONES.map(d => (
+                  <div key={d.clave} className='contents'>
+                    <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>{d.nombre}</dt>
+                    <dd className='text-texto-2'>{d.texto}</dd>
+                  </div>
+                ))}
+                <div className='contents'>
+                  <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>Por qué difieren</dt>
+                  <dd className='text-texto-2'>
+                    Las dos variantes dentro del recorte solo ven lo que la ROI contiene, así que pueden verse bien aunque
+                    la ROI haya dejado el defecto fuera. La re-proyectada devuelve el mapa a la imagen original y cuenta
+                    esa exclusión como puntuación cero; por eso es la que baja en transistor, bottle, cable y metal_nut.
+                  </dd>
+                </div>
+              </dl>
+            </details>
+          </div>
+        </Tarjeta>
+      )}
     </div>
   )
 }
