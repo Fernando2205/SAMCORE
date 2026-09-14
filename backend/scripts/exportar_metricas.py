@@ -49,7 +49,7 @@ def consolidar(resultados: Path) -> dict:
         "fecha": date.today().isoformat(),
         "protocolo": "PatchCore (WideResNet-50-2, capas 2 y 3, coreset 10 %, k = 1) sobre imagen completa (base) "
                      "y sobre la ROI de SAM con caja cuadrada (roi); píxel re-proyectado = mapa devuelto a "
-                     "coordenadas originales contra la verdad de terreno completa.",
+                     "coordenadas originales contra la máscara de referencia completa.",
         "categorias": categorias,
         "medias": medias,
     }

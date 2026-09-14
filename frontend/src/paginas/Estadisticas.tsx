@@ -274,7 +274,7 @@ const DEFINICIONES: { clave: string, nombre: string, texto: string }[] = [
   {
     clave: 'pixel_todas',
     nombre: 'Píxel, todas',
-    texto: 'Cada píxel del mapa de anomalías aporta su valor y su etiqueta en la máscara de verdad de terreno, sobre todas las imágenes de prueba. Se calcula dentro del recorte que recibe cada rama, así que penaliza defectos no localizados y falsas alarmas sobre piezas sanas, pero ignora lo que la ROI dejó fuera.'
+    texto: 'Cada píxel del mapa de anomalías aporta su valor y su etiqueta en la máscara de referencia, sobre todas las imágenes de prueba. Se calcula dentro del recorte que recibe cada rama, así que penaliza defectos no localizados y falsas alarmas sobre piezas sanas, pero ignora lo que la ROI dejó fuera.'
   },
   {
     clave: 'pixel_anomalas',
@@ -382,7 +382,7 @@ export function PaginaEstadisticas () {
       {metricas !== null && (
         <Tarjeta
           titulo='Evaluación del experimento'
-          nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con verdad de terreno, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
+          nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con anotaciones de referencia, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
         >
           <div className='mt-4'>
             <TablaMetricas datos={metricas} />
@@ -390,7 +390,7 @@ export function PaginaEstadisticas () {
               Base: PatchCore sobre la imagen completa. ROI: PatchCore sobre la región segmentada por SAM. En rojo, las
               caídas de dos centésimas o más respecto de la base. Pasa el cursor por el nombre de cada métrica para ver su
               definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
-              máscaras de verdad de terreno del conjunto de datos.
+              máscaras de referencia del conjunto de datos.
             </p>
             <details className='mt-3 border border-hairline bg-papel px-4 py-3'>
               <summary className='cursor-pointer text-[13px] font-semibold text-tinta'>Cómo leer las cuatro métricas</summary>
