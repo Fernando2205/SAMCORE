@@ -67,14 +67,16 @@ def mapa_sobre(img: Image.Image, mapa01: np.ndarray) -> Image.Image:
     return Image.alpha_composite(img.convert("RGBA"), capa).convert("RGB")
 
 
-def figura_segmentacion(salida: Path) -> None:
+def figura_segmentacion(salida: Path, casos: list[tuple[str, str]] | None = None) -> None:
     from app.motor import orquestador
 
     motor = orquestador.instancia()
-    motor.preparar()
+    if not motor.listo:
+        motor.preparar()
     assert motor.listo, motor.error
     paneles = []
-    for cat, imagen_id in [("capsule", "crack/000.png"), ("transistor", "bent_lead/000.png"), ("bottle", "broken_large/000.png")]:
+    casos = casos or [("capsule", "crack/000.png"), ("transistor", "bent_lead/000.png"), ("bottle", "broken_large/000.png")]
+    for cat, imagen_id in casos:
         with Image.open(galeria.ruta_imagen(cat, imagen_id)) as img:
             img = img.convert("RGB")
         r = motor.inspeccionar(img, cat)
@@ -88,7 +90,7 @@ def figura_segmentacion(salida: Path) -> None:
             (r["_recorte"], f"ROI ({r['caja']['roi'][2] - r['caja']['roi'][0] + 1} px de lado)"),
             (mapa_sobre(img, np.clip(r["_mapa"] / (1.5 * r["umbral"]), 0, 1)), f"Mapa re-proyectado · {r['veredicto']}"),
         ])
-    rejilla(paneles, ["capsule", "transistor", "bottle"]).save(salida, optimize=True)
+    rejilla(paneles, [c for c, _ in casos]).save(salida, optimize=True)
     print("guardada", salida)
 
 
@@ -125,8 +127,16 @@ def main() -> None:
         sys.exit(__doc__)
     resultados, images = Path(sys.argv[1]), Path(sys.argv[2])
     galeria.escanear()
-    figura_resultados(resultados, images / "resultados_visuales.png")
-    figura_segmentacion(images / "segmentacion_pasos.png")
+    solo = sys.argv[3] if len(sys.argv) > 3 else "todas"
+    if solo in ("todas", "resultados"):
+        figura_resultados(resultados, images / "resultados_visuales.png")
+    if solo in ("todas", "segmentacion"):
+        figura_segmentacion(images / "segmentacion_pasos.png")
+    if solo in ("todas", "inestables"):
+        figura_segmentacion(images / "segmentacion_inestables.png", [
+            ("cable", "good/000.png"), ("cable", "missing_cable/000.png"),
+            ("metal_nut", "good/000.png"), ("metal_nut", "flip/000.png"),
+        ])
 
 
 if __name__ == "__main__":
