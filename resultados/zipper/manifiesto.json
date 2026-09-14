@@ -1,0 +1,8 @@
+{
+  "categoria": "zipper",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "3044a4b7b0969ca1e58e9b3ce8781419b7b9aa0d7eb7183dc2ec32a83a5e76b6",
+    "calibracion.json": "d205d2c4b7b788aeb2da24d7b18f369f11c66e6d9482dc2a19864319d338fec6"
+  }
+}

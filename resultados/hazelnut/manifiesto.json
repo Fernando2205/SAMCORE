@@ -1,0 +1,8 @@
+{
+  "categoria": "hazelnut",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "d1a0bc0d8dfdbadbb12ce224073429ee35a11a271a547cbb5d1663a01f05de98",
+    "calibracion.json": "117bbfec7163196ca4185317f1d2bc74e59bc8704837665c1a71bf26edaa5f17"
+  }
+}

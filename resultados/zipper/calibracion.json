@@ -1,0 +1,32 @@
+{
+  "categoria": "zipper",
+  "umbral": 1.313662,
+  "percentil": 99,
+  "n_validacion": 36,
+  "n_preparacion": 204,
+  "n_parches": 15993,
+  "dim_parche": 1024,
+  "capas": [
+    "layer2",
+    "layer3"
+  ],
+  "tam_entrada": [
+    224,
+    224
+  ],
+  "resize": 256,
+  "coreset_pct": 10,
+  "regla_seleccion": {
+    "area_min_pct": 3,
+    "area_max_pct": 95,
+    "rho": 0.35,
+    "pesos": {
+      "iou": 0.6,
+      "estabilidad": 0.4,
+      "relleno": 0.25,
+      "borde": -0.15
+    }
+  },
+  "semilla": 0,
+  "torchvision": "0.26.0+cu128"
+}

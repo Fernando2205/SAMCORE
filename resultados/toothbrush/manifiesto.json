@@ -1,0 +1,8 @@
+{
+  "categoria": "toothbrush",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "dac5e284c26661b77fc54fa5c24ed04cb1ddb0d8bde4cddec06f22f3f4d09bea",
+    "calibracion.json": "3718e743040e051ec66171e0bcfe0d6822dc2143b5fda121e260b1c9dd6a9cbe"
+  }
+}

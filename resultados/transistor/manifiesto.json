@@ -1,0 +1,8 @@
+{
+  "categoria": "transistor",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "40541171df86e94b792acb462356daac994cbffc7587b863339124e518810ff2",
+    "calibracion.json": "53767c3b4cb63791f5635d33af434983f5afe18acc726b666d953d92a87579ae"
+  }
+}

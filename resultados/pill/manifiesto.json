@@ -1,0 +1,8 @@
+{
+  "categoria": "pill",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "0ab5a4c710aae2b57c9b0e674d72e5e97c2890c22a4457ca9693b924c86cf8f2",
+    "calibracion.json": "fcae9c0f95fecad7c8a57be82fc3d1fb9f29be292ac5774e37912ef183769e7a"
+  }
+}

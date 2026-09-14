@@ -1,0 +1,8 @@
+{
+  "categoria": "capsule",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "74f7b1d46b116896d97b79f75ae868b9e6bdc36003260645c9b833fd7b822ee3",
+    "calibracion.json": "6b31f981d17f8b8abe01f6c1a91ed7df336fa0608b20fce1a5001c21e0a97852"
+  }
+}

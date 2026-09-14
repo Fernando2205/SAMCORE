@@ -1,0 +1,8 @@
+{
+  "categoria": "bottle",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "95ee06a24a38ae9f76d6128fbe640954795a15a56ba9ab69a81bff04b3c5b543",
+    "calibracion.json": "892b8b91ae068a327941db336e5675ed17f0d8eb01800f619f8a34fbcdfc7804"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "categoria": "screw",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "404375475174e460352be757e543be9c3415af5a7d5a9fdcb8a2797329113f5f",
+    "calibracion.json": "60099f60c2027cc4f54188cde2e51eb5ea932b8650837fcd11b676d9b5264d7e"
+  }
+}
