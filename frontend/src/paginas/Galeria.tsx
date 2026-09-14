@@ -17,9 +17,8 @@ function Miniatura ({ categoria, imagenId, numero, onClick }: { categoria: strin
           className='h-full w-full object-cover'
         />
       </span>
-      <span className='flex items-baseline justify-between border-t border-hairline-2 px-3 py-2 font-mono text-[11px] text-texto-3 group-hover:text-tinta'>
-        <span>imagen</span>
-        <span>{String(numero).padStart(2, '0')}</span>
+      <span className='border-t border-hairline-2 px-3 py-2 text-center font-mono text-[11px] text-texto-3 group-hover:text-tinta'>
+        {String(numero).padStart(2, '0')}
       </span>
     </button>
   )
