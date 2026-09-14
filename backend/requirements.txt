@@ -1,2 +1,12 @@
-fastapi
-uvicorn
+# Dependencias fijadas (M-08). torch y torchvision se instalan desde el
+# indice de PyTorch para la variante de CUDA del entorno; ver README.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32
+pydantic==2.13.4
+pillow==12.3.0
+numpy==2.5.2
+scipy==1.18.1
+torch==2.11.0
+torchvision==0.26.0
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git@dca509fe793f601edb92606367a655c15ac00fdf

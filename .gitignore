@@ -15,4 +15,12 @@ backend/*.db
 # verificado por los manifiestos SHA-256; el contrato esta en su README
 backend/artefactos/*/
 backend/.admin_inicial.txt
-.env
+.env# motor real: pesos, galeria de imagenes (MVTec AD) y datos de inspecciones
+backend/pesos/*.pth
+backend/galeria/*/
+backend/datos/
+backend/samcore.db-wal
+backend/samcore.db-shm
+
+# dotfiles necesarios en el repositorio
+!.dockerignore
