@@ -14,6 +14,29 @@ const COLOR_TINTA = '#16181a'
 const fmt = (n: number, dec = 0) => n.toLocaleString('es-CO', { maximumFractionDigits: dec, minimumFractionDigits: dec })
 const fmtMs = (ms: number | null) => (ms === null ? '—' : ms >= 1000 ? `${fmt(ms / 1000, 1)} s` : `${fmt(ms)} ms`)
 
+const retraso = (ms: number): React.CSSProperties => ({ '--retraso': `${ms}ms` } as React.CSSProperties)
+
+/** Cuenta de 0 al valor con una curva suave; sin animación si el sistema pide menos movimiento. */
+function useContador (valor: number, duracion = 900): number {
+  const [actual, setActual] = useState(0)
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setActual(valor)
+      return
+    }
+    const inicio = performance.now()
+    let marco = 0
+    const paso = (t: number) => {
+      const p = Math.min(1, (t - inicio) / duracion)
+      setActual(valor * (1 - Math.pow(1 - p, 3)))
+      if (p < 1) marco = requestAnimationFrame(paso)
+    }
+    marco = requestAnimationFrame(paso)
+    return () => cancelAnimationFrame(marco)
+  }, [valor, duracion])
+  return actual
+}
+
 interface Aviso {
   x: number
   y: number
@@ -112,9 +135,9 @@ function Histograma ({ intervalos }: { intervalos: IntervaloHistograma[] }) {
             >
               <rect x={x0} y={arriba} width={w} height={areaH} fill='transparent' />
               {total > 0 && (
-                <rect x={x0} y={y(total)} width={w} height={h} fill={color} rx={Math.min(4, w / 2)} ry={Math.min(4, w / 2)} />
+                <rect className='anim-crecer-y' style={retraso(k * 18)} x={x0} y={y(total)} width={w} height={h} fill={color} rx={Math.min(4, w / 2)} ry={Math.min(4, w / 2)} />
               )}
-              {total > 0 && h > 6 && <rect x={x0} y={y(0) - Math.min(4, h)} width={w} height={Math.min(4, h)} fill={color} />}
+              {total > 0 && h > 6 && <rect className='anim-crecer-y' style={retraso(k * 18)} x={x0} y={y(0) - Math.min(4, h)} width={w} height={Math.min(4, h)} fill={color} />}
             </g>
           )
         })}
@@ -144,7 +167,7 @@ function BarrasCategoria ({ filas }: { filas: EstadisticaCategoria[] }) {
   return (
     <div className='relative' data-tarjeta>
       <div className='flex flex-col gap-2'>
-        {filas.map(f => {
+        {filas.map((f, i) => {
           const total = f.inspecciones
           const pctN = (f.normales / maximo) * 100
           const pctA = (f.anomalas / maximo) * 100
@@ -163,14 +186,14 @@ function BarrasCategoria ({ filas }: { filas: EstadisticaCategoria[] }) {
               <span className='flex h-4 flex-1 items-center gap-[2px]'>
                 {f.normales > 0 && (
                   <span
-                    className='h-[14px]'
-                    style={{ width: `${pctN}%`, background: COLOR_NORMAL, borderRadius: f.anomalas === 0 ? '0 4px 4px 0' : 0 }}
+                    className='anim-crecer-x h-[14px]'
+                    style={{ width: `${pctN}%`, background: COLOR_NORMAL, borderRadius: f.anomalas === 0 ? '0 4px 4px 0' : 0, ...retraso(i * 40) }}
                   />
                 )}
                 {f.anomalas > 0 && (
-                  <span className='h-[14px]' style={{ width: `${pctA}%`, background: COLOR_ANOMALO, borderRadius: '0 4px 4px 0' }} />
+                  <span className='anim-crecer-x h-[14px]' style={{ width: `${pctA}%`, background: COLOR_ANOMALO, borderRadius: '0 4px 4px 0', ...retraso(i * 40 + 120) }} />
                 )}
-                <span className='ml-1.5 font-mono text-[12px] text-texto-2'>{fmt(total)}</span>
+                <span className='anim-aparecer ml-1.5 font-mono text-[12px] text-texto-2' style={retraso(i * 40 + 400)}>{fmt(total)}</span>
               </span>
               <span className='w-[92px] text-right font-mono text-[11px] text-texto-4'>
                 {f.degradadas > 0 ? `${fmt(f.pct_roi_degradada, 1)} % deg.` : ''}
@@ -239,9 +262,9 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
                     onBlur={ocultar}
                   >
                     <rect x={0} y={cy - filaH / 2} width={ancho} height={filaH} fill='transparent' />
-                    <line x1={x(a)} x2={x(b)} y1={cy} y2={cy} stroke={color} strokeWidth={2} strokeLinecap='round' />
-                    <circle cx={x(b)} cy={cy} r={5} fill='white' stroke={color} strokeWidth={2} />
-                    <circle cx={x(a)} cy={cy} r={5} fill={color} stroke='white' strokeWidth={2} />
+                    <line className='anim-crecer-x' style={retraso(i * 50)} x1={x(a)} x2={x(b)} y1={cy} y2={cy} stroke={color} strokeWidth={2} strokeLinecap='round' />
+                    <circle className='anim-aparecer' style={retraso(i * 50 + 450)} cx={x(b)} cy={cy} r={5} fill='white' stroke={color} strokeWidth={2} />
+                    <circle className='anim-aparecer' style={retraso(i * 50)} cx={x(a)} cy={cy} r={5} fill={color} stroke='white' strokeWidth={2} />
                   </g>
                 )
               })}
@@ -324,21 +347,33 @@ function TablaMetricas ({ datos }: { datos: MetricasExperimento }) {
 }
 
 // ------------------------------------------------------------------- página
-function Kpi ({ rotulo, valor, detalle }: { rotulo: string, valor: string, detalle?: string }) {
+function Kpi ({ rotulo, valor, formato, detalle, orden = 0 }: {
+  rotulo: string
+  valor: number | null
+  formato: (n: number) => string
+  detalle?: string
+  orden?: number
+}) {
+  const animado = useContador(valor ?? 0)
   return (
-    <div className='border border-hairline bg-white px-5 py-4'>
+    <div className='anim-aparecer border border-hairline bg-white px-5 py-4' style={retraso(orden * 80)}>
       <span className='font-mono text-[10.5px] uppercase tracking-[2px] text-texto-4'>{rotulo}</span>
       <div className='mt-2 flex items-baseline gap-2.5'>
-        <span className='text-[36px] font-semibold leading-none'>{valor}</span>
+        <span className='text-[36px] font-semibold leading-none' style={{ fontVariantNumeric: 'tabular-nums' }}>
+          {valor === null ? '—' : formato(animado)}
+        </span>
         {detalle !== undefined && <span className='font-mono text-[13px] text-texto-2'>{detalle}</span>}
       </div>
     </div>
   )
 }
 
-function Tarjeta ({ titulo, nota, children, ancha }: { titulo: string, nota: string, children: React.ReactNode, ancha?: boolean }) {
+function Tarjeta ({ titulo, nota, children, ancha, orden = 0 }: { titulo: string, nota: string, children: React.ReactNode, ancha?: boolean, orden?: number }) {
   return (
-    <section className={`mt-4 flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'}`}>
+    <section
+      className={`anim-aparecer mt-4 flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'}`}
+      style={retraso(150 + orden * 120)}
+    >
       <h2 className='font-serif text-[19px]'>{titulo}</h2>
       <p className='mt-0.5 text-[12px] text-texto-3'>{nota}</p>
       <div className='mt-3.5'>{children}</div>
@@ -381,6 +416,7 @@ export function PaginaEstadisticas () {
 
       {metricas !== null && (
         <Tarjeta
+          orden={1}
           titulo='Evaluación del experimento'
           nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con anotaciones de referencia, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
         >
@@ -427,33 +463,34 @@ export function PaginaEstadisticas () {
         : (
           <>
             <div className='mt-5 grid grid-cols-4 gap-4'>
-              <Kpi rotulo='Inspecciones' valor={fmt(datos.total)} detalle={`${fmt(datos.propias)} con imagen propia`} />
-              <Kpi rotulo='Veredictos anómalos' valor={fmt(datos.anomalas)} detalle={`${fmt(datos.pct_anomalas, 1)} %`} />
-              <Kpi rotulo='Tasa de ROI degradada' valor={`${fmt(datos.pct_roi_degradada, 1)} %`} />
-              <Kpi rotulo='Segmentación p95' valor={fmtMs(datos.seg_p95_ms)} detalle={`detección p95 ${fmtMs(datos.det_p95_ms)}`} />
+              <Kpi rotulo='Inspecciones' valor={datos.total} formato={n => fmt(Math.round(n))} detalle={`${fmt(datos.propias)} con imagen propia`} orden={0} />
+              <Kpi rotulo='Veredictos anómalos' valor={datos.anomalas} formato={n => fmt(Math.round(n))} detalle={`${fmt(datos.pct_anomalas, 1)} %`} orden={1} />
+              <Kpi rotulo='Tasa de ROI degradada' valor={datos.pct_roi_degradada} formato={n => `${fmt(n, 1)} %`} orden={2} />
+              <Kpi rotulo='Segmentación p95' valor={datos.seg_p95_ms} formato={n => fmtMs(Math.round(n))} detalle={`detección p95 ${fmtMs(datos.det_p95_ms)}`} orden={3} />
             </div>
 
             <div className='mt-4 flex items-stretch gap-4'>
               <Tarjeta
                 ancha
+                orden={2}
                 titulo='Puntuación frente al umbral'
                 nota='Cuántas inspecciones caen a cada distancia del umbral de su categoría. Las cercanas a 1,0 son los casos límite.'
               >
                 <Histograma intervalos={datos.histograma} />
               </Tarjeta>
-              <Tarjeta titulo='Inspecciones por categoría' nota='Volumen y veredictos; a la derecha, la proporción con ROI degradada.'>
+              <Tarjeta orden={3} titulo='Inspecciones por categoría' nota='Volumen y veredictos; a la derecha, la proporción con ROI degradada.'>
                 <BarrasCategoria filas={datos.por_categoria} />
               </Tarjeta>
             </div>
 
             <div className='mt-4 flex items-stretch gap-4'>
-              <Tarjeta ancha titulo='Tiempo por etapa y categoría' nota='Mediana y percentil 95 por inspección, medidos en la GPU del servicio. Escalas independientes por etapa.'>
+              <Tarjeta ancha orden={4} titulo='Tiempo por etapa y categoría' nota='Mediana y percentil 95 por inspección, medidos en la GPU del servicio. Escalas independientes por etapa.'>
                 <div className='flex gap-8'>
                   <PanelTiempos titulo='Segmentación (SAM)' color={COLOR_SEGMENTACION} filas={datos.por_categoria} p50={f => f.seg_p50_ms} p95={f => f.seg_p95_ms} unidad='s' />
                   <PanelTiempos titulo='Detección (PatchCore)' color={COLOR_DETECCION} filas={datos.por_categoria} p50={f => f.det_p50_ms} p95={f => f.det_p95_ms} unidad='ms' />
                 </div>
               </Tarjeta>
-              <Tarjeta titulo='Detalle por categoría' nota='Los mismos datos de los gráficos, en tabla.'>
+              <Tarjeta orden={5} titulo='Detalle por categoría' nota='Los mismos datos de los gráficos, en tabla.'>
                 <div className='grid grid-cols-[1.2fr_0.7fr_0.8fr_0.8fr_0.9fr_0.9fr] gap-2 border-b-2 border-tinta pb-2 font-mono text-[10px] uppercase tracking-[1px] text-texto-4'>
                   <span>Categoría</span>
                   <span className='text-right'>Insp.</span>

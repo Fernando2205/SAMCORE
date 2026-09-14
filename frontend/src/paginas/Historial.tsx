@@ -94,7 +94,7 @@ export function PaginaHistorial () {
 
   return (
     <div className='flex flex-1 flex-col px-12 pb-8'>
-      <div className='mt-6 flex items-end justify-between'>
+      <div className='anim-aparecer mt-6 flex items-end justify-between'>
         <h1 className='font-serif text-[34px] leading-tight'>Tu historial de inspecciones</h1>
         <span className='font-mono text-[12px] text-texto-2'>
           {filas.length} inspecciones · {anomalas} anómalas · {propias} con imagen propia
@@ -180,14 +180,15 @@ export function PaginaHistorial () {
                     <span /><span>Fecha</span><span>Categoría</span><span>Imagen</span><span>Origen</span>
                     <span>Veredicto</span><span>Puntuación / Umbral</span><span>ROI</span><span />
                   </div>
-                  {visibles.map(f => (
+                  {visibles.map((f, i) => (
                     <div
                       key={f.id}
                       role='button'
                       tabIndex={0}
                       onClick={() => navegar(`/inspeccion?id=${f.id}`)}
                       onKeyDown={e => { if (e.key === 'Enter') navegar(`/inspeccion?id=${f.id}`) }}
-                      className={`grid ${COLUMNAS} cursor-pointer items-center gap-3 border-b border-hairline-2 px-5 py-2.5 text-left text-[13px] last:border-b-0 hover:bg-papel ${seleccion.has(f.id) ? 'bg-marca/5' : ''}`}
+                      className={`anim-aparecer grid ${COLUMNAS} cursor-pointer items-center gap-3 border-b border-hairline-2 px-5 py-2.5 text-left text-[13px] last:border-b-0 hover:bg-papel ${seleccion.has(f.id) ? 'bg-marca/5' : ''}`}
+                      style={{ '--retraso': `${Math.min(i, 24) * 28}ms` } as React.CSSProperties}
                     >
                       <input
                         type='checkbox'
