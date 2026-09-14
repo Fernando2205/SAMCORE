@@ -515,23 +515,22 @@ export function PaginaEstadisticas () {
               definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
               máscaras de referencia del conjunto de datos.
             </p>
-            <details className='mt-3 border border-hairline bg-papel px-4 py-3'>
-              <summary className='cursor-pointer text-[13px] font-semibold text-tinta'>Cómo leer las cuatro métricas</summary>
+            <details className='desplegable mt-3 border border-hairline bg-papel px-4 py-3'>
+              <summary className='flex cursor-pointer select-none items-center gap-2 text-[13px] font-semibold text-tinta'>
+                <span className='flecha inline-block text-[11px] text-marca'>▶</span>
+                Cómo leer las cuatro métricas
+              </summary>
               <dl className='mt-3 grid grid-cols-[170px_1fr] gap-x-4 gap-y-2.5 text-[12.5px] leading-relaxed'>
-                {DEFINICIONES.map(d => (
+                {[...DEFINICIONES, {
+                  clave: 'diferencia',
+                  nombre: 'Por qué difieren',
+                  texto: 'Las dos variantes dentro del recorte solo ven lo que la ROI contiene, así que pueden verse bien aunque la ROI haya dejado el defecto fuera. La re-proyectada devuelve el mapa a la imagen original y cuenta esa exclusión como puntuación cero; por eso es la que baja en transistor, bottle, cable y metal_nut.'
+                }].map((d, i) => (
                   <div key={d.clave} className='contents'>
-                    <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>{d.nombre}</dt>
-                    <dd className='text-texto-2'>{d.texto}</dd>
+                    <dt className='anim-aparecer font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2' style={retraso(i * 90)}>{d.nombre}</dt>
+                    <dd className='anim-aparecer text-texto-2' style={retraso(i * 90 + 40)}>{d.texto}</dd>
                   </div>
                 ))}
-                <div className='contents'>
-                  <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>Por qué difieren</dt>
-                  <dd className='text-texto-2'>
-                    Las dos variantes dentro del recorte solo ven lo que la ROI contiene, así que pueden verse bien aunque
-                    la ROI haya dejado el defecto fuera. La re-proyectada devuelve el mapa a la imagen original y cuenta
-                    esa exclusión como puntuación cero; por eso es la que baja en transistor, bottle, cable y metal_nut.
-                  </dd>
-                </div>
               </dl>
             </details>
           </div>
