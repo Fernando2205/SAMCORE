@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Navigate, Outlet, useNavigate } from 'react-router-dom'
 import { api } from '../api'
+import type { Salud } from '../api'
 import { useSesion } from '../auth'
 import { Sello, Wordmark } from './Sello'
 
-interface Salud {
-  estado: string
-  motor: string
+function etiquetaMotor (salud: Salud | null): string {
+  if (salud === null) return 'sin conexión'
+  if (salud.motor === 'real') return `motor real · ${salud.gpu}`
+  if (salud.motor === 'cargando' || salud.motor === 'sin_iniciar') return 'motor arrancando…'
+  return `motor ${salud.motor}`
 }
 
 function Pestana ({ a, children }: { a: string, children: string }) {
@@ -65,8 +68,8 @@ export function Marco () {
             {sesion.rol === 'administrador' && <Pestana a='/admin'>Administración</Pestana>}
           </nav>
           <span className='flex items-center gap-2 rounded-full border border-hairline bg-white px-3.5 py-1.5 font-mono text-[11.5px] text-texto-2'>
-            <span className={`h-[7px] w-[7px] rounded-full ${salud ? 'bg-vnormal' : 'bg-anomalo'}`} />
-            {salud ? `motor ${salud.motor}` : 'sin conexión'}
+            <span className={`h-[7px] w-[7px] rounded-full ${salud === null ? 'bg-anomalo' : salud.motor === 'real' ? 'bg-vnormal' : 'bg-alerta'}`} />
+            {etiquetaMotor(salud)}
           </span>
           <span className='font-mono text-[11.5px] text-texto-3'>{sesion.correo}</span>
           <button

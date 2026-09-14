@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
-import { api, ErrorApi } from '../api'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { api, mensajeDeError, subirImagen } from '../api'
 import type { Resultado } from '../api'
 
 const ETAPAS = [
@@ -11,9 +11,14 @@ const ETAPAS = [
   'Puntuación y veredicto'
 ]
 
+interface EstadoNavegacion {
+  archivo?: File
+  categoria?: string
+}
+
 function Figura ({ titulo, nota, children }: { titulo: string, nota: string, children?: React.ReactNode }) {
   return (
-    <figure className='flex flex-col'>
+    <figure className='flex min-w-0 flex-col'>
       <div className='relative flex h-[300px] items-center justify-center overflow-hidden border border-tinta bg-papel-2'>
         {children}
       </div>
@@ -24,28 +29,29 @@ function Figura ({ titulo, nota, children }: { titulo: string, nota: string, chi
   )
 }
 
-function MarcadorImagen ({ imagenId }: { imagenId: string }) {
-  return (
-    <span className='flex flex-col items-center gap-2 font-mono text-[12px] text-texto-4'>
-      <svg width='54' height='54' viewBox='0 0 24 24' fill='none' aria-hidden='true'>
-        <rect x='3' y='5' width='18' height='14' rx='1' stroke='#a49c8d' strokeWidth='1.4' />
-        <circle cx='9' cy='10' r='1.7' stroke='#a49c8d' strokeWidth='1.4' />
-        <path d='M4 17 L9.5 12.5 L13.5 16 L16.5 13.5 L20 16.5' stroke='#a49c8d' strokeWidth='1.4' strokeLinejoin='round' />
-      </svg>
-      {imagenId}
-      <span className='text-[10px]'>marcador de posición</span>
-    </span>
-  )
+function Esqueleto () {
+  return <div className='h-[300px] animate-pulse border border-dashed border-borde-input bg-papel-3' />
 }
 
 export function PaginaInspeccion () {
   const [parametros] = useSearchParams()
-  const categoria = parametros.get('categoria') ?? ''
+  const ubicacion = useLocation()
+  const navegar = useNavigate()
+  const estadoNavegacion = (ubicacion.state ?? {}) as EstadoNavegacion
+  const idInforme = parametros.get('id')
+  const archivo = estadoNavegacion.archivo
+  const categoria = parametros.get('categoria') ?? estadoNavegacion.categoria ?? ''
   const imagen = parametros.get('imagen') ?? ''
+  const reabriendo = idInforme !== null
+
   const [etapa, setEtapa] = useState(0)
   const [resultado, setResultado] = useState<Resultado | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [borrando, setBorrando] = useState(false)
   const listoRef = useRef<Resultado | null>(null)
+
+  const vistaPreviaPropia = useMemo(() => (archivo !== undefined ? URL.createObjectURL(archivo) : null), [archivo])
+  useEffect(() => () => { if (vistaPreviaPropia !== null) URL.revokeObjectURL(vistaPreviaPropia) }, [vistaPreviaPropia])
 
   useEffect(() => {
     setEtapa(0)
@@ -53,16 +59,36 @@ export function PaginaInspeccion () {
     setError(null)
     listoRef.current = null
 
-    api<Resultado>('/inspeccionar', {
-      method: 'POST',
-      body: JSON.stringify({ categoria, imagen_id: imagen })
-    })
-      .then(r => { listoRef.current = r })
-      .catch(e => setError(e instanceof ErrorApi ? e.message : 'No fue posible conectar con el servidor.'))
+    let solicitud: Promise<Resultado>
+    if (idInforme !== null) {
+      solicitud = api<Resultado>(`/historial/${idInforme}/informe`)
+    } else if (archivo !== undefined) {
+      solicitud = subirImagen(categoria, archivo)
+    } else if (categoria !== '' && imagen !== '') {
+      solicitud = api<Resultado>('/inspeccionar', {
+        method: 'POST',
+        body: JSON.stringify({ categoria, imagen_id: imagen })
+      })
+    } else {
+      setError('No hay ninguna imagen seleccionada.')
+      return
+    }
 
+    solicitud
+      .then(r => {
+        listoRef.current = r
+        if (idInforme !== null) {
+          setResultado(r)
+          setEtapa(ETAPAS.length)
+        }
+      })
+      .catch(e => setError(mensajeDeError(e)))
+
+    if (idInforme !== null) return
     const temporizador = setInterval(() => {
       setEtapa(anterior => {
         if (anterior >= ETAPAS.length) return anterior
+        if (anterior === 1 && listoRef.current === null) return anterior
         if (anterior === ETAPAS.length - 1) {
           if (listoRef.current !== null) {
             setResultado(listoRef.current)
@@ -72,27 +98,39 @@ export function PaginaInspeccion () {
         }
         return anterior + 1
       })
-    }, 450)
+    }, 350)
     return () => clearInterval(temporizador)
-  }, [categoria, imagen])
+  }, [idInforme, categoria, imagen, archivo])
 
   const anomalo = resultado?.veredicto === 'ANOMALO'
   const degradada = resultado?.estado_roi === 'ROI_DEGRADADA'
+  const propia = resultado?.origen === 'propia' || (resultado === null && archivo !== undefined)
   const pctBarra = resultado === null ? 0 : Math.min(100, Math.round((resultado.puntuacion / (resultado.umbral / 0.68)) * 100))
+  const urlOriginal = resultado?.imagenes.original ?? vistaPreviaPropia ?? (categoria !== '' && imagen !== '' ? `/api/galeria/${categoria}/imagen/${imagen}` : null)
+  const etiquetaImagen = resultado !== null ? `${resultado.categoria} / ${resultado.imagen_id}` : `${categoria} / ${archivo?.name ?? imagen}`
+
+  const borrar = () => {
+    if (resultado === null || !window.confirm('¿Borrar esta inspección y sus imágenes de tu historial?')) return
+    setBorrando(true)
+    api(`/historial/${resultado.id}`, { method: 'DELETE' })
+      .then(() => navegar('/historial'))
+      .catch(e => { setError(mensajeDeError(e)); setBorrando(false) })
+  }
 
   return (
     <div className='flex flex-1 flex-col px-12 pb-8'>
       <div className='mt-6 flex items-end justify-between'>
         <div className='flex flex-col gap-1.5'>
-          <Link to='/' className='flex items-center gap-2 text-[13px] font-semibold text-marca'>
-            ← Volver a la galería
+          <Link to={reabriendo ? '/historial' : '/'} className='flex items-center gap-2 text-[13px] font-semibold text-marca'>
+            ← {reabriendo ? 'Volver al historial' : 'Volver a la galería'}
           </Link>
           <h1 className='font-serif text-[34px] leading-tight'>
             {resultado === null && error === null ? 'Analizando la imagen…' : 'Informe de inspección'}
           </h1>
         </div>
         <div className='text-right font-mono text-[12px] leading-relaxed text-texto-2'>
-          {categoria} / {imagen}
+          {etiquetaImagen}
+          {resultado?.creada_en !== undefined && <><br />{resultado.creada_en}</>}
         </div>
       </div>
 
@@ -105,55 +143,55 @@ export function PaginaInspeccion () {
         </div>
       )}
 
+      {propia && error === null && (
+        <div className='mt-4 flex items-start gap-2.5 border border-marca/40 bg-marca/5 px-4 py-2.5 text-[13px] text-[#2f4a44]'>
+          <strong className='shrink-0'>Veredicto orientativo.</strong>
+          <span>
+            El sistema no verifica que la imagen pertenezca a la categoría elegida ni detecta imágenes fuera de
+            distribución. La imagen se guarda re-codificada, sin metadatos, en tu historial, y puedes borrarla
+            cuando quieras.
+          </span>
+        </div>
+      )}
+
       {degradada && (
         <div className='mt-4 flex items-center gap-2.5 border border-alerta/40 bg-alerta/5 px-4 py-2.5 text-[13px] text-alerta-texto'>
           <strong>ROI degradada:</strong>
           <span>
-            no se encontró una máscara confiable del objeto y el análisis se realizó sobre la imagen
-            casi completa. Interpreta la localización con cautela.
+            ninguna máscara superó los filtros de la regla de selección y el análisis se realizó sobre la máscara
+            de mayor área. Interpreta la localización con cautela.
           </span>
         </div>
       )}
 
       {error === null && (
         <div className='mt-5 flex flex-1 items-start gap-9'>
-          <div className='grid flex-1 grid-cols-3 gap-5'>
-            <Figura titulo='Fig. 1 — Original.' nota='Imagen de prueba tal como está en el dataset.'>
-              <MarcadorImagen imagenId={imagen} />
+          <div className='grid min-w-0 flex-1 grid-cols-3 gap-5'>
+            <Figura titulo='Fig. 1 — Original.' nota={propia ? 'Imagen propia, re-codificada.' : 'Imagen de prueba tal como está en el dataset.'}>
+              {urlOriginal !== null && <img src={urlOriginal} alt='Original' className='max-h-full max-w-full object-contain' />}
             </Figura>
             {resultado === null
               ? (
                 <>
-                  <div className='h-[300px] animate-pulse border border-dashed border-borde-input bg-papel-3' />
-                  <div className='h-[300px] animate-pulse border border-dashed border-borde-input bg-papel-3' />
+                  <Esqueleto />
+                  <Esqueleto />
                 </>
                 )
               : (
                 <>
-                  <Figura titulo='Fig. 2 — ROI.' nota={degradada ? 'Recorte de respaldo: abarca casi toda la imagen.' : 'Segmentada por SAM, recorte por caja.'}>
-                    <span
-                      className={`absolute border-2 border-dashed ${degradada ? 'inset-2 border-alerta/65' : 'inset-8 border-marca/65'}`}
-                    />
-                    <MarcadorImagen imagenId={imagen} />
+                  <Figura
+                    titulo='Fig. 2 — ROI.'
+                    nota={degradada
+                      ? 'Recorte de respaldo sobre la máscara de mayor área.'
+                      : `Caja cuadrada con margen sobre la máscara elegida (${resultado.caja.roi[2] - resultado.caja.roi[0] + 1} px de lado).`}
+                  >
+                    <img src={resultado.imagenes.roi} alt='ROI' className='max-h-full max-w-full object-contain' />
                   </Figura>
-                  <Figura titulo='Fig. 3 — Mapa de calor.' nota={anomalo ? 'En coordenadas de la imagen original.' : 'Sin regiones que se acerquen al umbral.'}>
-                    <MarcadorImagen imagenId={imagen} />
-                    {resultado.regiones.map((r, i) => (
-                      <span
-                        key={i}
-                        className='pointer-events-none absolute rounded-full'
-                        style={{
-                          left: `${(r.x - r.radio) * 100}%`,
-                          top: `${(r.y - r.radio) * 100}%`,
-                          width: `${r.radio * 2 * 100}%`,
-                          height: `${r.radio * 2 * 100}%`,
-                          background: `radial-gradient(closest-side, rgba(216,74,56,${0.75 * r.intensidad}), rgba(216,150,40,${0.4 * r.intensidad}) 55%, transparent 75%)`
-                        }}
-                      />
-                    ))}
-                    {!anomalo && (
-                      <span className='pointer-events-none absolute inset-0' style={{ background: 'rgba(72,108,220,0.08)' }} />
-                    )}
+                  <Figura titulo='Fig. 3 — Mapa de calor.' nota={anomalo ? 'Re-proyectado a coordenadas de la imagen original.' : 'Sin regiones que se acerquen al umbral.'}>
+                    <span className='relative inline-block max-h-full max-w-full'>
+                      <img src={resultado.imagenes.original} alt='' className='max-h-[298px] max-w-full object-contain' />
+                      <img src={resultado.imagenes.mapa} alt='Mapa de anomalías' className='absolute inset-0 h-full w-full object-contain' />
+                    </span>
                   </Figura>
                 </>
                 )}
@@ -186,15 +224,18 @@ export function PaginaInspeccion () {
                     })}
                   </ul>
                   <p className='mt-4 border-t border-hairline pt-3.5 text-[12px] leading-relaxed text-texto-3'>
-                    Si el servicio estaba suspendido por inactividad, el primer análisis puede tardar
-                    entre 1 y 3 minutos mientras arranca.
+                    La segmentación con SAM tarda alrededor de 10 segundos por imagen en la GPU del servicio.
+                    Si el servicio estaba suspendido por inactividad, el primer análisis puede tardar entre 1 y 3
+                    minutos mientras arranca.
                   </p>
                 </div>
                 )
               : (
                 <>
                   <section>
-                    <span className='font-mono text-[11px] uppercase tracking-[2px] text-texto-4'>01 — Veredicto</span>
+                    <span className='font-mono text-[11px] uppercase tracking-[2px] text-texto-4'>
+                      01 — Veredicto{propia ? ' (orientativo)' : ''}
+                    </span>
                     <div
                       className={`mt-3.5 inline-block -rotate-2 border-[2.5px] px-5 py-2.5 text-[17px] font-bold tracking-[3px] ${anomalo ? 'border-anomalo bg-anomalo/5 text-anomalo-texto' : 'border-vnormal bg-vnormal/5 text-vnormal-texto'}`}
                     >
@@ -243,11 +284,36 @@ export function PaginaInspeccion () {
                       {degradada
                         ? 'Ninguna máscara superó los filtros de selección; se usó la de mayor área.'
                         : 'La máscara del objeto superó los filtros de la regla de selección.'}
+                      {' '}{resultado.mascaras} máscaras candidatas.
                     </p>
                   </section>
 
                   <section className='border-t border-hairline pt-4'>
-                    <span className='font-mono text-[11px] uppercase tracking-[2px] text-texto-4'>03 — Tiempos de inferencia</span>
+                    <span className='font-mono text-[11px] uppercase tracking-[2px] text-texto-4'>03 — Origen de la imagen</span>
+                    {propia
+                      ? (
+                        <>
+                          <p className='mt-2 text-[12.5px] leading-relaxed text-texto-2'>
+                            Imagen propia · guardada re-codificada y sin metadatos · en tu historial · borrable.
+                          </p>
+                          <button
+                            onClick={borrar}
+                            disabled={borrando}
+                            className='mt-3 border border-anomalo/50 bg-white px-3.5 py-1.5 text-[12.5px] font-semibold text-anomalo-texto hover:bg-anomalo/5 disabled:opacity-50'
+                          >
+                            {borrando ? 'Borrando…' : 'Borrar del historial'}
+                          </button>
+                        </>
+                        )
+                      : (
+                        <p className='mt-2 text-[12.5px] leading-relaxed text-texto-2'>
+                          Galería de prueba de MVTec AD (CC BY-NC-SA 4.0) · {resultado.imagen_id}
+                        </p>
+                        )}
+                  </section>
+
+                  <section className='border-t border-hairline pt-4'>
+                    <span className='font-mono text-[11px] uppercase tracking-[2px] text-texto-4'>04 — Tiempos de inferencia</span>
                     <div className='mt-3 flex justify-between text-[13px] text-texto-2'>
                       <span>Segmentación</span>
                       <span className='font-mono'>{resultado.tiempos_ms.segmentacion.toLocaleString('es-CO')} ms</span>
@@ -255,6 +321,10 @@ export function PaginaInspeccion () {
                     <div className='mt-1.5 flex justify-between text-[13px] text-texto-2'>
                       <span>Detección</span>
                       <span className='font-mono'>{resultado.tiempos_ms.deteccion.toLocaleString('es-CO')} ms</span>
+                    </div>
+                    <div className='mt-1.5 flex justify-between text-[13px] text-texto-2'>
+                      <span>Re-proyección</span>
+                      <span className='font-mono'>{resultado.tiempos_ms.reproyeccion.toLocaleString('es-CO')} ms</span>
                     </div>
                     <div className='mt-2.5 flex justify-between border-t border-hairline pt-2.5 text-[13px] font-bold'>
                       <span>Total</span>
