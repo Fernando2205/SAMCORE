@@ -13,19 +13,19 @@ const FILTROS: { clave: Filtro, nombre: string }[] = [
   { clave: 'propias', nombre: 'Imágenes propias' }
 ]
 
-const COLUMNAS = 'grid-cols-[64px_150px_100px_1fr_90px_120px_150px_100px_120px]'
+const COLUMNAS = 'grid-cols-[28px_64px_150px_100px_1fr_90px_120px_150px_100px_60px]'
 
 export function PaginaHistorial () {
   const navegar = useNavigate()
   const [filas, setFilas] = useState<FilaHistorial[] | null>(null)
   const [filtro, setFiltro] = useState<Filtro>('todas')
+  const [seleccion, setSeleccion] = useState<Set<number>>(new Set())
+  const [borrando, setBorrando] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const cargar = () => {
+  useEffect(() => {
     api<FilaHistorial[]>('/historial').then(setFilas).catch(() => setFilas([]))
-  }
-
-  useEffect(cargar, [])
+  }, [])
 
   if (filas === null) {
     return (
@@ -44,13 +44,52 @@ export function PaginaHistorial () {
   })
   const anomalas = filas.filter(f => f.veredicto === 'ANOMALO').length
   const propias = filas.filter(f => f.origen === 'propia').length
+  const todasVisiblesMarcadas = visibles.length > 0 && visibles.every(f => seleccion.has(f.id))
 
-  const borrar = (fila: FilaHistorial, evento: React.MouseEvent) => {
+  const alternar = (id: number) => {
+    setSeleccion(actual => {
+      const nueva = new Set(actual)
+      if (nueva.has(id)) nueva.delete(id)
+      else nueva.add(id)
+      return nueva
+    })
+  }
+
+  const alternarVisibles = () => {
+    setSeleccion(actual => {
+      const nueva = new Set(actual)
+      if (todasVisiblesMarcadas) visibles.forEach(f => nueva.delete(f.id))
+      else visibles.forEach(f => nueva.add(f.id))
+      return nueva
+    })
+  }
+
+  const quitarFilas = (ids: number[]) => {
+    setFilas(actuales => (actuales ?? []).filter(f => !ids.includes(f.id)))
+    setSeleccion(actual => {
+      const nueva = new Set(actual)
+      ids.forEach(id => nueva.delete(id))
+      return nueva
+    })
+  }
+
+  const borrarUna = (fila: FilaHistorial, evento: React.MouseEvent) => {
     evento.stopPropagation()
     if (!window.confirm('¿Borrar esta inspección y sus imágenes de tu historial?')) return
     api(`/historial/${fila.id}`, { method: 'DELETE' })
-      .then(() => setFilas(actuales => (actuales ?? []).filter(f => f.id !== fila.id)))
+      .then(() => quitarFilas([fila.id]))
       .catch(e => setError(mensajeDeError(e)))
+  }
+
+  const borrarSeleccion = () => {
+    const ids = [...seleccion]
+    if (ids.length === 0) return
+    if (!window.confirm(`¿Borrar ${ids.length} inspecciones y sus imágenes de tu historial?`)) return
+    setBorrando(true)
+    api<{ borradas: number[] }>('/historial/borrar', { method: 'POST', body: JSON.stringify({ ids }) })
+      .then(r => quitarFilas(r.borradas))
+      .catch(e => setError(mensajeDeError(e)))
+      .finally(() => setBorrando(false))
   }
 
   return (
@@ -81,18 +120,38 @@ export function PaginaHistorial () {
           )
         : (
           <>
-            <div className='mt-4 flex gap-2 text-[13px]'>
-              {FILTROS.map(f => (
-                <button
-                  key={f.clave}
-                  onClick={() => setFiltro(f.clave)}
-                  className={filtro === f.clave
-                    ? 'border border-tinta bg-tinta px-4 py-1.5 font-semibold text-papel'
-                    : 'border border-hairline bg-white px-4 py-1.5 text-texto-2 hover:border-tinta'}
-                >
-                  {f.nombre}
-                </button>
-              ))}
+            <div className='mt-4 flex items-center justify-between gap-4'>
+              <div className='flex gap-2 text-[13px]'>
+                {FILTROS.map(f => (
+                  <button
+                    key={f.clave}
+                    onClick={() => setFiltro(f.clave)}
+                    className={filtro === f.clave
+                      ? 'border border-tinta bg-tinta px-4 py-1.5 font-semibold text-papel'
+                      : 'border border-hairline bg-white px-4 py-1.5 text-texto-2 hover:border-tinta'}
+                  >
+                    {f.nombre}
+                  </button>
+                ))}
+              </div>
+              {seleccion.size > 0 && (
+                <div className='flex items-center gap-3 text-[13px]'>
+                  <span className='font-mono text-[12px] text-texto-2'>{seleccion.size} seleccionadas</span>
+                  <button
+                    onClick={() => setSeleccion(new Set())}
+                    className='border border-hairline bg-white px-3 py-1.5 text-texto-2 hover:border-tinta'
+                  >
+                    Quitar selección
+                  </button>
+                  <button
+                    onClick={borrarSeleccion}
+                    disabled={borrando}
+                    className='border border-anomalo bg-anomalo px-4 py-1.5 font-semibold text-white hover:bg-anomalo-texto disabled:opacity-50'
+                  >
+                    {borrando ? 'Borrando…' : `Borrar ${seleccion.size} seleccionadas`}
+                  </button>
+                </div>
+              )}
             </div>
 
             {visibles.length === 0
@@ -111,6 +170,13 @@ export function PaginaHistorial () {
               : (
                 <div className='mt-4 border border-hairline bg-white'>
                   <div className={`grid ${COLUMNAS} items-center gap-3 border-b-2 border-tinta px-5 py-3 font-mono text-[10.5px] uppercase tracking-[1.5px] text-texto-4`}>
+                    <input
+                      type='checkbox'
+                      aria-label='Seleccionar todas las inspecciones visibles'
+                      checked={todasVisiblesMarcadas}
+                      onChange={alternarVisibles}
+                      className='h-3.5 w-3.5 accent-marca'
+                    />
                     <span /><span>Fecha</span><span>Categoría</span><span>Imagen</span><span>Origen</span>
                     <span>Veredicto</span><span>Puntuación / Umbral</span><span>ROI</span><span />
                   </div>
@@ -121,8 +187,16 @@ export function PaginaHistorial () {
                       tabIndex={0}
                       onClick={() => navegar(`/inspeccion?id=${f.id}`)}
                       onKeyDown={e => { if (e.key === 'Enter') navegar(`/inspeccion?id=${f.id}`) }}
-                      className={`grid ${COLUMNAS} cursor-pointer items-center gap-3 border-b border-hairline-2 px-5 py-2.5 text-left text-[13px] last:border-b-0 hover:bg-papel`}
+                      className={`grid ${COLUMNAS} cursor-pointer items-center gap-3 border-b border-hairline-2 px-5 py-2.5 text-left text-[13px] last:border-b-0 hover:bg-papel ${seleccion.has(f.id) ? 'bg-marca/5' : ''}`}
                     >
+                      <input
+                        type='checkbox'
+                        aria-label='Seleccionar esta inspección'
+                        checked={seleccion.has(f.id)}
+                        onChange={() => alternar(f.id)}
+                        onClick={e => e.stopPropagation()}
+                        className='h-3.5 w-3.5 accent-marca'
+                      />
                       <span className='flex h-12 w-12 items-center justify-center overflow-hidden border border-hairline bg-papel-2'>
                         <img src={`/api/historial/${f.id}/imagen/roi`} alt='' loading='lazy' className='h-full w-full object-cover' />
                       </span>
@@ -155,23 +229,20 @@ export function PaginaHistorial () {
                             <span className='h-[7px] w-[7px] rounded-full bg-vnormal' />Correcta
                           </span>
                           )}
-                      <span className='flex items-center justify-end gap-3'>
-                        <span className='text-[12.5px] font-bold text-marca'>Ver</span>
-                        <button
-                          onClick={e => borrar(f, e)}
-                          title='Borrar esta inspección y sus imágenes'
-                          className='border border-hairline bg-white px-2 py-0.5 text-[11.5px] text-texto-3 hover:border-anomalo hover:text-anomalo-texto'
-                        >
-                          Borrar
-                        </button>
-                      </span>
+                      <button
+                        onClick={e => borrarUna(f, e)}
+                        title='Borrar esta inspección y sus imágenes'
+                        className='justify-self-end border border-hairline bg-white px-2 py-0.5 text-[11.5px] text-texto-3 hover:border-anomalo hover:text-anomalo-texto'
+                      >
+                        Borrar
+                      </button>
                     </div>
                   ))}
                 </div>
                 )}
             <p className='mt-3 text-[12px] text-texto-4'>
-              Selecciona una fila para reabrir el informe completo. Borrar una inspección elimina su registro y sus
-              imágenes (original propia, ROI y mapa) del servidor.
+              Selecciona una fila para reabrir el informe completo. Marca varias casillas para borrarlas a la vez;
+              borrar una inspección elimina su registro y sus imágenes (original propia, ROI y mapa) del servidor.
             </p>
           </>
           )}

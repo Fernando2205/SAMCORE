@@ -111,6 +111,10 @@ class DatosEstadoUsuario(BaseModel):
     accion: str
 
 
+class DatosBorrado(BaseModel):
+    ids: list[int]
+
+
 def _ip(request: Request) -> str:
     return request.client.host if request.client else "desconocida"
 
@@ -411,6 +415,35 @@ def imagen_informe(inspeccion_id: int, clase: str, usuario: UsuarioActual) -> Fi
     if ruta is None:
         raise HTTPException(404, {"error": "sin_imagen", "mensaje": "Esa imagen ya no está disponible."})
     return FileResponse(ruta, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.post("/api/historial/borrar")
+def borrar_inspecciones(datos: DatosBorrado, usuario: UsuarioActual) -> dict:
+    """Borrado por lotes: solo las inspecciones de la sesion; los demas
+    identificadores se ignoran sin revelar si existen (M-12)."""
+    ids = sorted({int(i) for i in datos.ids})[:200]
+    if not ids:
+        raise HTTPException(422, {"error": "parametros", "mensaje": "No hay inspecciones seleccionadas."})
+    marcadores = ",".join("?" * len(ids))
+    con = db.conectar()
+    try:
+        propias = [
+            f["id"] for f in con.execute(
+                f"SELECT id FROM inspecciones WHERE usuario_id = ? AND id IN ({marcadores})", (usuario["id"], *ids)
+            ).fetchall()
+        ]
+        if propias:
+            con.execute(
+                f"DELETE FROM inspecciones WHERE usuario_id = ? AND id IN ({','.join('?' * len(propias))})",
+                (usuario["id"], *propias),
+            )
+            con.commit()
+    finally:
+        con.close()
+    for inspeccion_id in propias:
+        almacen.borrar(inspeccion_id)
+    log.info("evento=inspecciones_borradas usuario=%s cantidad=%s", _anonimo(usuario["correo"]), len(propias))
+    return {"borradas": propias}
 
 
 @app.delete("/api/historial/{inspeccion_id}")

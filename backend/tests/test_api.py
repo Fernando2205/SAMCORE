@@ -238,6 +238,18 @@ def test_m17_imagen_grande_se_reduce(usuario_a):
     assert max(r.json()["tam"]) == ingesta.LADO_MAXIMO
 
 
+def test_borrado_por_lotes_solo_lo_propio(usuario_a, usuario_b, raiz_temporal):
+    ids_a = [_inspeccionar(usuario_a).json()["id"] for _ in range(3)]
+    id_b = _inspeccionar(usuario_b).json()["id"]
+    r = usuario_a.post("/api/historial/borrar", json={"ids": ids_a[:2] + [id_b, 999999]})
+    assert r.status_code == 200 and sorted(r.json()["borradas"]) == sorted(ids_a[:2])
+    restantes = {f["id"] for f in usuario_a.get("/api/historial").json()}
+    assert ids_a[2] in restantes and not (set(ids_a[:2]) & restantes)
+    assert usuario_b.get(f"/api/historial/{id_b}/informe").status_code == 200
+    assert not (raiz_temporal / "datos" / "inspecciones" / str(ids_a[0])).exists()
+    assert usuario_a.post("/api/historial/borrar", json={"ids": []}).status_code == 422
+
+
 # ------------------------------------------------ M-14 persistencia ---
 def test_m14_bd_en_modo_wal_y_datos_persisten(raiz_temporal):
     con = sqlite3.connect(raiz_temporal / "pruebas.db")
