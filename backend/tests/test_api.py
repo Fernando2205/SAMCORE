@@ -238,7 +238,9 @@ def test_m17_imagen_grande_se_reduce(usuario_a):
     assert max(r.json()["tam"]) == ingesta.LADO_MAXIMO
 
 
-def test_borrado_por_lotes_solo_lo_propio(usuario_a, usuario_b, raiz_temporal):
+def test_borrado_por_lotes_solo_lo_propio(admin, raiz_temporal):
+    usuario_a = crear_usuario(admin, "lotes-a@pruebas.local")
+    usuario_b = crear_usuario(admin, "lotes-b@pruebas.local")
     ids_a = [_inspeccionar(usuario_a).json()["id"] for _ in range(3)]
     id_b = _inspeccionar(usuario_b).json()["id"]
     r = usuario_a.post("/api/historial/borrar", json={"ids": ids_a[:2] + [id_b, 999999]})
