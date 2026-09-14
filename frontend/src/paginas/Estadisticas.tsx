@@ -265,23 +265,47 @@ function Par ({ par }: { par: ParMetrica }) {
   )
 }
 
+const DEFINICIONES: { clave: string, nombre: string, texto: string }[] = [
+  {
+    clave: 'imagen',
+    nombre: 'AUROC imagen',
+    texto: 'Cada imagen de prueba aporta una puntuación y una etiqueta (normal o defectuosa). Mide si la puntuación separa ambas clases con cualquier umbral; 1,000 es separación perfecta y 0,500 equivale al azar.'
+  },
+  {
+    clave: 'pixel_todas',
+    nombre: 'Píxel, todas',
+    texto: 'Cada píxel del mapa de anomalías aporta su valor y su etiqueta en la máscara de verdad de terreno, sobre todas las imágenes de prueba. Se calcula dentro del recorte que recibe cada rama, así que penaliza defectos no localizados y falsas alarmas sobre piezas sanas, pero ignora lo que la ROI dejó fuera.'
+  },
+  {
+    clave: 'pixel_anomalas',
+    nombre: 'Píxel, anómalas',
+    texto: 'Igual que la anterior pero solo sobre las imágenes que contienen algún defecto: mide la calidad de la localización dentro de una pieza defectuosa, sin el efecto de las piezas normales. También se calcula dentro del recorte.'
+  },
+  {
+    clave: 'pixel_reproyectado',
+    nombre: 'Píxel, re-proyectado',
+    texto: 'El mapa se devuelve a las coordenadas de la imagen original y se evalúa contra la máscara completa; todo lo que la ROI dejó fuera recibe puntuación cero. Es la única variante que compara la línea base y la ROI sobre los mismos píxeles y la métrica primaria del experimento.'
+  }
+]
+
 function TablaMetricas ({ datos }: { datos: MetricasExperimento }) {
   const columnas = 'grid-cols-[1.1fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.5fr]'
   const cabecera = 'font-mono text-[10px] uppercase tracking-[1px] text-texto-4'
+  const def = (clave: string) => DEFINICIONES.find(d => d.clave === clave)?.texto
   return (
     <div className='overflow-x-auto'>
       <div className={`grid ${columnas} gap-2 border-b border-hairline pb-1 ${cabecera}`}>
         <span />
-        <span className='col-span-2 text-center'>AUROC imagen</span>
-        <span className='col-span-2 text-center'>Píxel, todas</span>
-        <span className='col-span-2 text-center'>Píxel, anómalas</span>
-        <span className='col-span-2 text-center'>Píxel, re-proyectado</span>
-        <span />
+        <span className='col-span-2 cursor-help text-center underline decoration-dotted underline-offset-2' title={def('imagen')}>AUROC imagen</span>
+        <span className='col-span-2 cursor-help text-center underline decoration-dotted underline-offset-2' title={def('pixel_todas')}>Píxel, todas</span>
+        <span className='col-span-2 cursor-help text-center underline decoration-dotted underline-offset-2' title={def('pixel_anomalas')}>Píxel, anómalas</span>
+        <span className='col-span-2 cursor-help text-center underline decoration-dotted underline-offset-2' title={def('pixel_reproyectado')}>Píxel, re-proyectado</span>
+        <span className='cursor-help text-right underline decoration-dotted underline-offset-2' title='Lado de la imagen dividido por el lado mediano de la ROI cuadrada en el conjunto de prueba. 1,00 significa que la ROI es la imagen completa.'>Zoom</span>
       </div>
       <div className={`grid ${columnas} gap-2 border-b-2 border-tinta py-1.5 ${cabecera}`}>
         <span>Categoría</span>
         {['Base', 'ROI', 'Base', 'ROI', 'Base', 'ROI', 'Base', 'ROI'].map((t, i) => <span key={i} className='text-right'>{t}</span>)}
-        <span className='text-right'>Zoom</span>
+        <span />
       </div>
       {datos.categorias.map(c => (
         <div key={c.categoria} className={`grid ${columnas} gap-2 border-b border-hairline-2 py-1.5 font-mono text-[12px] text-texto-2`} style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -364,10 +388,29 @@ export function PaginaEstadisticas () {
             <TablaMetricas datos={metricas} />
             <p className='mt-3 text-[12px] leading-relaxed text-texto-3'>
               Base: PatchCore sobre la imagen completa. ROI: PatchCore sobre la región segmentada por SAM. En rojo, las
-              caídas de dos centésimas o más respecto de la base. Zoom: lado de la imagen sobre lado mediano de la ROI
-              (1,00 = la ROI es la imagen completa). Estas métricas no se calculan con el uso de la plataforma: requieren
-              las máscaras de verdad de terreno del conjunto de datos.
+              caídas de dos centésimas o más respecto de la base. Pasa el cursor por el nombre de cada métrica para ver su
+              definición, o despliega la guía. Estas métricas no se calculan con el uso de la plataforma: requieren las
+              máscaras de verdad de terreno del conjunto de datos.
             </p>
+            <details className='mt-3 border border-hairline bg-papel px-4 py-3'>
+              <summary className='cursor-pointer text-[13px] font-semibold text-tinta'>Cómo leer las cuatro métricas</summary>
+              <dl className='mt-3 grid grid-cols-[170px_1fr] gap-x-4 gap-y-2.5 text-[12.5px] leading-relaxed'>
+                {DEFINICIONES.map(d => (
+                  <div key={d.clave} className='contents'>
+                    <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>{d.nombre}</dt>
+                    <dd className='text-texto-2'>{d.texto}</dd>
+                  </div>
+                ))}
+                <div className='contents'>
+                  <dt className='font-mono text-[11.5px] uppercase tracking-[1px] text-texto-2'>Por qué difieren</dt>
+                  <dd className='text-texto-2'>
+                    Las dos variantes dentro del recorte solo ven lo que la ROI contiene, así que pueden verse bien aunque
+                    la ROI haya dejado el defecto fuera. La re-proyectada devuelve el mapa a la imagen original y cuenta
+                    esa exclusión como puntuación cero; por eso es la que baja en transistor, bottle, cable y metal_nut.
+                  </dd>
+                </div>
+              </dl>
+            </details>
           </div>
         </Tarjeta>
       )}
