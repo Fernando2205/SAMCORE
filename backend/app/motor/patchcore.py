@@ -22,6 +22,12 @@ from torchvision import transforms
 
 log = logging.getLogger("samcore")
 
+# Los bancos y los umbrales se calcularon en fp32 exacto; en GPU Ampere o
+# posteriores torch usa TF32 por defecto en convoluciones, lo que desplaza las
+# puntuaciones respecto de la calibracion. Se desactiva para reproducirla.
+torch.backends.cudnn.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = False
+
 RESIZE = 256
 IMAGESIZE = 224
 PATCHSIZE = 3
@@ -72,9 +78,17 @@ class DetectorPatchCore:
     def __init__(self, device: torch.device) -> None:
         self.device = device
         pesos = torchvision.models.Wide_ResNet50_2_Weights.IMAGENET1K_V1
-        red = torchvision.models.wide_resnet50_2(weights=pesos)
+        red = torchvision.models.wide_resnet50_2(weights=pesos).to(device)
+        self._red = red
+        # La implementacion de referencia mide las dimensiones de las
+        # caracteristicas con un paso hacia adelante de un tensor de unos en
+        # modo entrenamiento, lo que actualiza una vez las estadisticas de
+        # BatchNorm (momento 0,1). Los bancos y umbrales se prepararon con esa
+        # red, asi que se reproduce el mismo paso antes de pasar a evaluacion.
+        red.train()
+        with torch.no_grad():
+            self._capas(torch.ones(1, 3, IMAGESIZE, IMAGESIZE, device=device))
         red.eval()
-        self._red = red.to(device)
         log.info("evento=patchcore_listo device=%s", device)
 
     @torch.inference_mode()
