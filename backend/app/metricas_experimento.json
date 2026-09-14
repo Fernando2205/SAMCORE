@@ -1,0 +1,254 @@
+{
+ "fecha": "2026-09-14",
+ "protocolo": "PatchCore (WideResNet-50-2, capas 2 y 3, coreset 10 %, k = 1) sobre imagen completa (base) y sobre la ROI de SAM con caja cuadrada (roi); píxel re-proyectado = mapa devuelto a coordenadas originales contra la verdad de terreno completa.",
+ "categorias": [
+  {
+   "categoria": "bottle",
+   "n_entrenamiento": 209,
+   "n_prueba": 83,
+   "imagen": {
+    "base": 1.0,
+    "roi": 0.9992
+   },
+   "pixel_todas": {
+    "base": 0.9848,
+    "roi": 0.96
+   },
+   "pixel_anomalas": {
+    "base": 0.9796,
+    "roi": 0.9447
+   },
+   "pixel_reproyectado": {
+    "base": 0.9861,
+    "roi": 0.7196
+   },
+   "zoom": 1.98,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "cable",
+   "n_entrenamiento": 224,
+   "n_prueba": 150,
+   "imagen": {
+    "base": 0.9968,
+    "roi": 0.8628
+   },
+   "pixel_todas": {
+    "base": 0.9841,
+    "roi": 0.9129
+   },
+   "pixel_anomalas": {
+    "base": 0.9753,
+    "roi": 0.8884
+   },
+   "pixel_reproyectado": {
+    "base": 0.9882,
+    "roi": 0.6555
+   },
+   "zoom": 2.62,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "capsule",
+   "n_entrenamiento": 219,
+   "n_prueba": 132,
+   "imagen": {
+    "base": 0.9793,
+    "roi": 0.9721
+   },
+   "pixel_todas": {
+    "base": 0.9895,
+    "roi": 0.9893
+   },
+   "pixel_anomalas": {
+    "base": 0.9874,
+    "roi": 0.9871
+   },
+   "pixel_reproyectado": {
+    "base": 0.9907,
+    "roi": 0.9911
+   },
+   "zoom": 1.02,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "hazelnut",
+   "n_entrenamiento": 391,
+   "n_prueba": 110,
+   "imagen": {
+    "base": 1.0,
+    "roi": 1.0
+   },
+   "pixel_todas": {
+    "base": 0.9868,
+    "roi": 0.98
+   },
+   "pixel_anomalas": {
+    "base": 0.9791,
+    "roi": 0.9684
+   },
+   "pixel_reproyectado": {
+    "base": 0.9901,
+    "roi": 0.9908
+   },
+   "zoom": 1.27,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "metal_nut",
+   "n_entrenamiento": 220,
+   "n_prueba": 115,
+   "imagen": {
+    "base": 0.999,
+    "roi": 0.9203
+   },
+   "pixel_todas": {
+    "base": 0.9834,
+    "roi": 0.9556
+   },
+   "pixel_anomalas": {
+    "base": 0.9792,
+    "roi": 0.946
+   },
+   "pixel_reproyectado": {
+    "base": 0.9848,
+    "roi": 0.5795
+   },
+   "zoom": 1.01,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "pill",
+   "n_entrenamiento": 267,
+   "n_prueba": 167,
+   "imagen": {
+    "base": 0.9667,
+    "roi": 0.9618
+   },
+   "pixel_todas": {
+    "base": 0.978,
+    "roi": 0.9774
+   },
+   "pixel_anomalas": {
+    "base": 0.9761,
+    "roi": 0.9754
+   },
+   "pixel_reproyectado": {
+    "base": 0.9818,
+    "roi": 0.9812
+   },
+   "zoom": 1.01,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "screw",
+   "n_entrenamiento": 320,
+   "n_prueba": 160,
+   "imagen": {
+    "base": 0.9877,
+    "roi": 0.9574
+   },
+   "pixel_todas": {
+    "base": 0.9952,
+    "roi": 0.9934
+   },
+   "pixel_anomalas": {
+    "base": 0.9938,
+    "roi": 0.9914
+   },
+   "pixel_reproyectado": {
+    "base": 0.9824,
+    "roi": 0.9558
+   },
+   "zoom": 1.04,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "toothbrush",
+   "n_entrenamiento": 60,
+   "n_prueba": 42,
+   "imagen": {
+    "base": 1.0,
+    "roi": 1.0
+   },
+   "pixel_todas": {
+    "base": 0.9857,
+    "roi": 0.9857
+   },
+   "pixel_anomalas": {
+    "base": 0.98,
+    "roi": 0.98
+   },
+   "pixel_reproyectado": {
+    "base": 0.9659,
+    "roi": 0.9659
+   },
+   "zoom": 1.0,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "transistor",
+   "n_entrenamiento": 213,
+   "n_prueba": 100,
+   "imagen": {
+    "base": 0.9987,
+    "roi": 0.8317
+   },
+   "pixel_todas": {
+    "base": 0.961,
+    "roi": 0.9321
+   },
+   "pixel_anomalas": {
+    "base": 0.9274,
+    "roi": 0.797
+   },
+   "pixel_reproyectado": {
+    "base": 0.9639,
+    "roi": 0.7067
+   },
+   "zoom": 2.12,
+   "roi_degradada": 0
+  },
+  {
+   "categoria": "zipper",
+   "n_entrenamiento": 240,
+   "n_prueba": 151,
+   "imagen": {
+    "base": 0.995,
+    "roi": 0.995
+   },
+   "pixel_todas": {
+    "base": 0.9887,
+    "roi": 0.9887
+   },
+   "pixel_anomalas": {
+    "base": 0.9856,
+    "roi": 0.9856
+   },
+   "pixel_reproyectado": {
+    "base": 0.9541,
+    "roi": 0.9541
+   },
+   "zoom": 1.0,
+   "roi_degradada": 0
+  }
+ ],
+ "medias": {
+  "imagen": {
+   "base": 0.9923,
+   "roi": 0.95
+  },
+  "pixel_todas": {
+   "base": 0.9837,
+   "roi": 0.9675
+  },
+  "pixel_anomalas": {
+   "base": 0.9764,
+   "roi": 0.9464
+  },
+  "pixel_reproyectado": {
+   "base": 0.9788,
+   "roi": 0.85
+  }
+ }
+}

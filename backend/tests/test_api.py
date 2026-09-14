@@ -252,6 +252,15 @@ def test_borrado_por_lotes_solo_lo_propio(admin, raiz_temporal):
     assert usuario_a.post("/api/historial/borrar", json={"ids": []}).status_code == 422
 
 
+def test_metricas_del_experimento(servidor, usuario_a):
+    assert servidor.get("/api/metricas").status_code == 401
+    datos = usuario_a.get("/api/metricas").json()
+    assert len(datos["categorias"]) == 10
+    for c in datos["categorias"]:
+        assert 0 <= c["imagen"]["roi"] <= 1 and 0 <= c["pixel_reproyectado"]["base"] <= 1
+    assert datos["medias"]["imagen"]["base"] >= datos["medias"]["imagen"]["roi"]
+
+
 # ------------------------------------------------ M-14 persistencia ---
 def test_m14_bd_en_modo_wal_y_datos_persisten(raiz_temporal):
     con = sqlite3.connect(raiz_temporal / "pruebas.db")

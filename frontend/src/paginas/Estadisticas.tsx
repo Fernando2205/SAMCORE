@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import type { Estadisticas, EstadisticaCategoria, IntervaloHistograma } from '../api'
+import type { Estadisticas, EstadisticaCategoria, IntervaloHistograma, MetricasExperimento, ParMetrica } from '../api'
 
 // Colores validados (contraste y visión de color): veredicto = estado,
 // etapas = identidad. El texto nunca lleva el color del dato.
@@ -254,6 +254,51 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
   )
 }
 
+// --------------------------------------------- métricas del experimento (AUROC)
+function Par ({ par }: { par: ParMetrica }) {
+  const cae = par.base - par.roi >= 0.02
+  return (
+    <>
+      <span className='text-right'>{fmt(par.base, 3)}</span>
+      <span className={`text-right ${cae ? 'text-anomalo-texto' : ''}`}>{fmt(par.roi, 3)}</span>
+    </>
+  )
+}
+
+function TablaMetricas ({ datos }: { datos: MetricasExperimento }) {
+  const columnas = 'grid-cols-[1.1fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.6fr_0.5fr]'
+  const cabecera = 'font-mono text-[10px] uppercase tracking-[1px] text-texto-4'
+  return (
+    <div className='overflow-x-auto'>
+      <div className={`grid ${columnas} gap-2 border-b border-hairline pb-1 ${cabecera}`}>
+        <span />
+        <span className='col-span-2 text-center'>AUROC imagen</span>
+        <span className='col-span-2 text-center'>Píxel, todas</span>
+        <span className='col-span-2 text-center'>Píxel, anómalas</span>
+        <span className='col-span-2 text-center'>Píxel, re-proyectado</span>
+        <span />
+      </div>
+      <div className={`grid ${columnas} gap-2 border-b-2 border-tinta py-1.5 ${cabecera}`}>
+        <span>Categoría</span>
+        {['Base', 'ROI', 'Base', 'ROI', 'Base', 'ROI', 'Base', 'ROI'].map((t, i) => <span key={i} className='text-right'>{t}</span>)}
+        <span className='text-right'>Zoom</span>
+      </div>
+      {datos.categorias.map(c => (
+        <div key={c.categoria} className={`grid ${columnas} gap-2 border-b border-hairline-2 py-1.5 font-mono text-[12px] text-texto-2`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+          <span>{c.categoria}</span>
+          <Par par={c.imagen} /><Par par={c.pixel_todas} /><Par par={c.pixel_anomalas} /><Par par={c.pixel_reproyectado} />
+          <span className='text-right'>{fmt(c.zoom, 2)}</span>
+        </div>
+      ))}
+      <div className={`grid ${columnas} gap-2 py-2 font-mono text-[12px] font-semibold text-tinta`} style={{ fontVariantNumeric: 'tabular-nums' }}>
+        <span>Media</span>
+        <Par par={datos.medias.imagen} /><Par par={datos.medias.pixel_todas} /><Par par={datos.medias.pixel_anomalas} /><Par par={datos.medias.pixel_reproyectado} />
+        <span />
+      </div>
+    </div>
+  )
+}
+
 // ------------------------------------------------------------------- página
 function Kpi ({ rotulo, valor, detalle }: { rotulo: string, valor: string, detalle?: string }) {
   return (
@@ -269,7 +314,7 @@ function Kpi ({ rotulo, valor, detalle }: { rotulo: string, valor: string, detal
 
 function Tarjeta ({ titulo, nota, children, ancha }: { titulo: string, nota: string, children: React.ReactNode, ancha?: boolean }) {
   return (
-    <section className={`flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'}`}>
+    <section className={`mt-4 flex flex-col border border-hairline bg-white px-6 py-5 ${ancha === true ? 'flex-[1.4]' : 'flex-1'}`}>
       <h2 className='font-serif text-[19px]'>{titulo}</h2>
       <p className='mt-0.5 text-[12px] text-texto-3'>{nota}</p>
       <div className='mt-3.5'>{children}</div>
@@ -279,10 +324,12 @@ function Tarjeta ({ titulo, nota, children, ancha }: { titulo: string, nota: str
 
 export function PaginaEstadisticas () {
   const [datos, setDatos] = useState<Estadisticas | null>(null)
+  const [metricas, setMetricas] = useState<MetricasExperimento | null>(null)
   const [error, setError] = useState(false)
 
   useEffect(() => {
     api<Estadisticas>('/estadisticas').then(setDatos).catch(() => setError(true))
+    api<MetricasExperimento>('/metricas').then(setMetricas).catch(() => setMetricas(null))
   }, [])
 
   if (error) {
@@ -307,6 +354,23 @@ export function PaginaEstadisticas () {
         </div>
         <span className='font-mono text-[12px] text-texto-2'>{datos.usuarios_activos} cuentas activas</span>
       </div>
+
+      {metricas !== null && (
+        <Tarjeta
+          titulo='Evaluación del experimento'
+          nota={`AUROC por categoría sobre el conjunto de prueba de MVTec AD con verdad de terreno, salida del modo por lotes (${metricas.fecha}). ${metricas.protocolo}`}
+        >
+          <div className='mt-4'>
+            <TablaMetricas datos={metricas} />
+            <p className='mt-3 text-[12px] leading-relaxed text-texto-3'>
+              Base: PatchCore sobre la imagen completa. ROI: PatchCore sobre la región segmentada por SAM. En rojo, las
+              caídas de dos centésimas o más respecto de la base. Zoom: lado de la imagen sobre lado mediano de la ROI
+              (1,00 = la ROI es la imagen completa). Estas métricas no se calculan con el uso de la plataforma: requieren
+              las máscaras de verdad de terreno del conjunto de datos.
+            </p>
+          </div>
+        </Tarjeta>
+      )}
 
       {datos.total === 0
         ? (

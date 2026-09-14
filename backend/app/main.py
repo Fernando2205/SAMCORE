@@ -9,6 +9,7 @@ autenticacion y sesiones (M-10/M-11), historial filtrado por sesion (M-12),
 rol verificado en servidor (M-15), ingesta segura (M-16) y retencion
 controlada (M-17).
 """
+import json
 import logging
 import os
 import re
@@ -543,6 +544,18 @@ def estadisticas(usuario: UsuarioActual) -> dict:
         "histograma": _histograma(filas),
         "por_categoria": por_categoria,
     }
+
+
+_RUTA_METRICAS = Path(__file__).resolve().parent / "metricas_experimento.json"
+
+
+@app.get("/api/metricas")
+def metricas(usuario: UsuarioActual) -> dict:
+    """Metricas de evaluacion del experimento (AUROC por categoria), salida
+    del modo por lotes; se consolidan fuera de linea desde los resultados."""
+    if not _RUTA_METRICAS.is_file():
+        raise HTTPException(404, {"error": "sin_metricas", "mensaje": "Las métricas del experimento no están disponibles."})
+    return json.loads(_RUTA_METRICAS.read_text(encoding="utf-8"))
 
 
 # --------------------------------------------------------- administracion ---

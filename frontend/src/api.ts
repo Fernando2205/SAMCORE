@@ -104,6 +104,30 @@ export interface Estadisticas {
   por_categoria: EstadisticaCategoria[]
 }
 
+export interface ParMetrica {
+  base: number
+  roi: number
+}
+
+export interface MetricaCategoria {
+  categoria: string
+  n_entrenamiento: number
+  n_prueba: number
+  imagen: ParMetrica
+  pixel_todas: ParMetrica
+  pixel_anomalas: ParMetrica
+  pixel_reproyectado: ParMetrica
+  zoom: number
+  roi_degradada: number
+}
+
+export interface MetricasExperimento {
+  fecha: string
+  protocolo: string
+  categorias: MetricaCategoria[]
+  medias: { imagen: ParMetrica, pixel_todas: ParMetrica, pixel_anomalas: ParMetrica, pixel_reproyectado: ParMetrica }
+}
+
 export interface UsuarioAdmin {
   id: number
   correo: string
