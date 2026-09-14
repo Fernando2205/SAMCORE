@@ -1,0 +1,19 @@
+.git
+.gitignore
+USB_template
+viejo
+Template actualizado
+**/.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+backend/samcore.db*
+backend/.admin_inicial.txt
+backend/datos
+backend/pesos/*.pth
+backend/pesos/torch
+backend/tests
+backend/galeria/*/muestra
+frontend/dist
+deploy
+.env
