@@ -1,0 +1,8 @@
+{
+  "categoria": "cable",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "cde17a103c98445d7a9fd96c8f5692f5694968794d24c6b8ea975e54b11d660e",
+    "calibracion.json": "7b89a77ecd43c037079b15c5fbf9723863a66428b95971f86cda7bbf82d1b023"
+  }
+}

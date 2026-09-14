@@ -1,0 +1,8 @@
+{
+  "categoria": "metal_nut",
+  "version": "1",
+  "archivos": {
+    "banco.npz": "13c31f692f4e01e554d7f507bcafccee3179effd8a67c3459a802779550c5769",
+    "calibracion.json": "4b927461eda9353007f27ce57ef908adf3aa2d32af39da53b9373499d63c07f9"
+  }
+}
