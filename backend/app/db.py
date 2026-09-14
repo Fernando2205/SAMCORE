@@ -41,7 +41,9 @@ CREATE TABLE IF NOT EXISTS inspecciones (
   duracion_ms INTEGER NOT NULL,
   creada_en TEXT NOT NULL DEFAULT (datetime('now')),
   origen TEXT NOT NULL DEFAULT 'galeria',
-  motor TEXT NOT NULL DEFAULT 'simulado'
+  motor TEXT NOT NULL DEFAULT 'simulado',
+  segmentacion_ms INTEGER,
+  deteccion_ms INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_inspecciones_usuario ON inspecciones(usuario_id, creada_en);
 """
@@ -51,6 +53,8 @@ _COLUMNAS_NUEVAS = {
     "inspecciones": {
         "origen": "TEXT NOT NULL DEFAULT 'galeria'",
         "motor": "TEXT NOT NULL DEFAULT 'simulado'",
+        "segmentacion_ms": "INTEGER",
+        "deteccion_ms": "INTEGER",
     },
 }
 

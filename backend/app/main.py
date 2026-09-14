@@ -280,12 +280,14 @@ def _limitar_inspeccion(usuario: sqlite3.Row) -> None:
 def _registrar(usuario: sqlite3.Row, resultado: dict, imagen_id: str, origen: str, original: Image.Image | None) -> dict:
     con = db.conectar()
     try:
+        tiempos = resultado["tiempos_ms"]
         cur = con.execute(
-            "INSERT INTO inspecciones (usuario_id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms, origen, motor) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO inspecciones (usuario_id, categoria, imagen_id, puntuacion, umbral, veredicto, estado_roi, duracion_ms, "
+            "origen, motor, segmentacion_ms, deteccion_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 usuario["id"], resultado["categoria"], imagen_id, resultado["puntuacion"], resultado["umbral"],
-                resultado["veredicto"], resultado["estado_roi"], resultado["tiempos_ms"]["total"], origen, resultado["motor"],
+                resultado["veredicto"], resultado["estado_roi"], tiempos["total"], origen, resultado["motor"],
+                tiempos.get("segmentacion"), tiempos.get("deteccion"),
             ),
         )
         con.commit()
@@ -461,18 +463,45 @@ def borrar_inspeccion(inspeccion_id: int, usuario: UsuarioActual) -> dict:
 
 
 # ------------------------------------------------------------ estadisticas ---
+def _percentil(valores: list[int], p: float) -> int | None:
+    limpios = sorted(v for v in valores if v is not None)
+    if not limpios:
+        return None
+    return int(limpios[min(len(limpios) - 1, round(p * (len(limpios) - 1)))])
+
+
 def _p95(valores: list[int]) -> int:
-    if not valores:
-        return 0
-    ordenados = sorted(valores)
-    return ordenados[min(len(ordenados) - 1, round(0.95 * (len(ordenados) - 1)))]
+    return _percentil(valores, 0.95) or 0
+
+
+_HISTOGRAMA_ANCHO = 0.1
+_HISTOGRAMA_TOPE = 2.0
+
+
+def _histograma(filas) -> list[dict]:
+    """Razon puntuacion/umbral en intervalos de 0,1 hasta 2,0 y un ultimo
+    intervalo abierto; cada intervalo cuenta normales y anomalas."""
+    n = int(round(_HISTOGRAMA_TOPE / _HISTOGRAMA_ANCHO))
+    intervalos = [{"desde": round(i * _HISTOGRAMA_ANCHO, 2), "hasta": round((i + 1) * _HISTOGRAMA_ANCHO, 2),
+                   "normales": 0, "anomalas": 0} for i in range(n)]
+    intervalos.append({"desde": _HISTOGRAMA_TOPE, "hasta": None, "normales": 0, "anomalas": 0})
+    for f in filas:
+        if not f["umbral"]:
+            continue
+        razon = f["puntuacion"] / f["umbral"]
+        indice = min(n, max(0, int(razon / _HISTOGRAMA_ANCHO)))
+        intervalos[indice]["anomalas" if f["veredicto"] == "ANOMALO" else "normales"] += 1
+    return intervalos
 
 
 @app.get("/api/estadisticas")
 def estadisticas(usuario: UsuarioActual) -> dict:
     con = db.conectar()
     try:
-        filas = con.execute("SELECT categoria, veredicto, estado_roi, duracion_ms, origen FROM inspecciones").fetchall()
+        filas = con.execute(
+            "SELECT categoria, veredicto, estado_roi, duracion_ms, origen, puntuacion, umbral, segmentacion_ms, deteccion_ms "
+            "FROM inspecciones"
+        ).fetchall()
         usuarios_activos = con.execute("SELECT COUNT(*) FROM usuarios WHERE estado = 'activo'").fetchone()[0]
     finally:
         con.close()
@@ -484,12 +513,21 @@ def estadisticas(usuario: UsuarioActual) -> dict:
         propias = [f for f in filas if f["categoria"] == nombre]
         if not propias:
             continue
+        n_anomalas = sum(1 for f in propias if f["veredicto"] == "ANOMALO")
+        n_degradadas = sum(1 for f in propias if f["estado_roi"] == "ROI_DEGRADADA")
         por_categoria.append({
             "categoria": nombre,
             "inspecciones": len(propias),
-            "pct_anomalas": round(100 * sum(1 for f in propias if f["veredicto"] == "ANOMALO") / len(propias), 1),
-            "pct_roi_degradada": round(100 * sum(1 for f in propias if f["estado_roi"] == "ROI_DEGRADADA") / len(propias), 1),
+            "normales": len(propias) - n_anomalas,
+            "anomalas": n_anomalas,
+            "degradadas": n_degradadas,
+            "pct_anomalas": round(100 * n_anomalas / len(propias), 1),
+            "pct_roi_degradada": round(100 * n_degradadas / len(propias), 1),
             "p95_ms": _p95([f["duracion_ms"] for f in propias]),
+            "seg_p50_ms": _percentil([f["segmentacion_ms"] for f in propias], 0.5),
+            "seg_p95_ms": _percentil([f["segmentacion_ms"] for f in propias], 0.95),
+            "det_p50_ms": _percentil([f["deteccion_ms"] for f in propias], 0.5),
+            "det_p95_ms": _percentil([f["deteccion_ms"] for f in propias], 0.95),
         })
     por_categoria.sort(key=lambda c: -c["inspecciones"])
     return {
@@ -499,7 +537,10 @@ def estadisticas(usuario: UsuarioActual) -> dict:
         "pct_anomalas": round(100 * anomalas / total, 1) if total else 0.0,
         "pct_roi_degradada": round(100 * degradadas / total, 1) if total else 0.0,
         "p95_ms": _p95([f["duracion_ms"] for f in filas]),
+        "seg_p95_ms": _percentil([f["segmentacion_ms"] for f in filas], 0.95),
+        "det_p95_ms": _percentil([f["deteccion_ms"] for f in filas], 0.95),
         "usuarios_activos": usuarios_activos,
+        "histograma": _histograma(filas),
         "por_categoria": por_categoria,
     }
 

@@ -267,3 +267,13 @@ def test_estadisticas_agregadas(usuario_a):
     datos = usuario_a.get("/api/estadisticas").json()
     assert datos["total"] >= 1 and "por_categoria" in datos and "propias" in datos
     assert json.dumps(datos)
+    # histograma de puntuacion/umbral: 20 intervalos de 0,1 mas uno abierto; cuenta todas las inspecciones
+    assert len(datos["histograma"]) == 21 and datos["histograma"][-1]["hasta"] is None
+    assert sum(h["normales"] + h["anomalas"] for h in datos["histograma"]) == datos["total"]
+    assert all(h["anomalas"] == 0 for h in datos["histograma"] if h["hasta"] is not None and h["hasta"] <= 1.0)
+    assert all(h["normales"] == 0 for h in datos["histograma"] if h["desde"] >= 1.0)
+    # desglose y tiempos por etapa por categoria
+    fila = datos["por_categoria"][0]
+    assert fila["normales"] + fila["anomalas"] == fila["inspecciones"]
+    assert fila["seg_p95_ms"] is not None and fila["det_p50_ms"] is not None
+    assert datos["seg_p95_ms"] >= datos["det_p95_ms"]

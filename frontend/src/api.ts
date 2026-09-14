@@ -71,9 +71,23 @@ export interface FilaHistorial {
 export interface EstadisticaCategoria {
   categoria: string
   inspecciones: number
+  normales: number
+  anomalas: number
+  degradadas: number
   pct_anomalas: number
   pct_roi_degradada: number
   p95_ms: number
+  seg_p50_ms: number | null
+  seg_p95_ms: number | null
+  det_p50_ms: number | null
+  det_p95_ms: number | null
+}
+
+export interface IntervaloHistograma {
+  desde: number
+  hasta: number | null
+  normales: number
+  anomalas: number
 }
 
 export interface Estadisticas {
@@ -83,7 +97,10 @@ export interface Estadisticas {
   pct_anomalas: number
   pct_roi_degradada: number
   p95_ms: number
+  seg_p95_ms: number | null
+  det_p95_ms: number | null
   usuarios_activos: number
+  histograma: IntervaloHistograma[]
   por_categoria: EstadisticaCategoria[]
 }
 
