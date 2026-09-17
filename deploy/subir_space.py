@@ -14,7 +14,7 @@ from huggingface_hub import HfApi
 RAIZ = Path(__file__).resolve().parents[1]
 CABECERA = """---
 title: SamCore
-emoji: "\U0001F50D"
+emoji: 🔍
 colorFrom: gray
 colorTo: green
 sdk: docker
@@ -42,11 +42,16 @@ def main() -> None:
     repo = sys.argv[1]
     api = HfApi(token=token)
     api.create_repo(repo, repo_type="space", space_sdk="docker", exist_ok=True)
-    readme = CABECERA + (RAIZ / "README.md").read_text(encoding="utf-8")
-    api.upload_file(path_or_fileobj=readme.encode("utf-8"), path_in_repo="README.md", repo_id=repo, repo_type="space")
     api.upload_folder(
         folder_path=str(RAIZ), repo_id=repo, repo_type="space",
-        ignore_patterns=IGNORAR, commit_message="despliegue de SamCore",
+        ignore_patterns=IGNORAR + ["README.md"], commit_message="despliegue de SamCore",
+    )
+    # El README del Space lleva la cabecera YAML que configura el Space; se
+    # sube al final para que la carpeta no lo pise con el README de GitHub.
+    readme = CABECERA + (RAIZ / "README.md").read_text(encoding="utf-8")
+    api.upload_file(
+        path_or_fileobj=readme.encode("utf-8"), path_in_repo="README.md", repo_id=repo, repo_type="space",
+        commit_message="configuración del Space",
     )
     print(f"publicado: https://huggingface.co/spaces/{repo}")
 
