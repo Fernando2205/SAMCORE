@@ -9,9 +9,13 @@ Space (`/data`).
 
 1. Cuenta con método de pago (el hardware T4 small se factura por minuto
    activo) y un token de acceso con permiso de escritura.
-2. Crear el Space: SDK **Docker**, hardware **T4 small**, visibilidad
-   pública, *sleep time* 15 minutos, y activar **Persistent storage**
-   (small) para `/data`.
+2. Crear el Space: SDK **Docker** (plantilla Blank), hardware **T4 small**,
+   visibilidad **Protected** (aplicación pública, repositorio privado),
+   *sleep time* 15 minutos. En Settings → Storage Buckets, montar un bucket
+   **privado** con lectura y escritura en `/data`: ahí quedan el respaldo
+   de la base de datos y las imágenes de las inspecciones. La base de
+   datos activa vive en el disco local del contenedor y se copia al bucket
+   cada cinco minutos y al apagarse; al arrancar se restaura desde ahí.
 3. Variables del Space (Settings → Variables and secrets):
    - `SAMCORE_ADMIN_CORREO` = correo del operador.
    - `SAMCORE_ADMIN_CONTRASENA` = contraseña inicial del operador (secreto).

@@ -41,12 +41,14 @@ RUTA_FRONTEND = Path(os.environ.get("SAMCORE_FRONTEND", Path(__file__).resolve()
 @asynccontextmanager
 async def _ciclo_vida(app: FastAPI):
     db.iniciar()
+    db.iniciar_respaldo_periodico()
     galeria.escanear()
     if MODO_MOTOR != "simulado" and artefactos.categorias_con_artefactos():
         from .motor import orquestador
 
         orquestador.instancia().preparar_en_segundo_plano()
     yield
+    db.respaldar()
 
 
 app = FastAPI(title="SamCore API", version="1.0.0", docs_url=None, redoc_url=None, lifespan=_ciclo_vida)

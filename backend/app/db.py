@@ -12,6 +12,14 @@ log = logging.getLogger("samcore")
 RUTA_BD = Path(os.environ.get("SAMCORE_BD", Path(__file__).resolve().parent.parent / "samcore.db"))
 RUTA_CREDENCIAL_INICIAL = RUTA_BD.parent / ".admin_inicial.txt"
 
+# Respaldo de la base de datos (M-14). En el despliegue la BD vive en el disco
+# local del contenedor (SQLite necesita bloqueos que los almacenamientos
+# remotos montados no siempre ofrecen) y se copia al almacenamiento
+# persistente cada pocos minutos; al arrancar, si no hay BD local, se
+# restaura desde ese respaldo.
+RUTA_RESPALDO = Path(os.environ["SAMCORE_BD_RESPALDO"]) if os.environ.get("SAMCORE_BD_RESPALDO") else None
+INTERVALO_RESPALDO_S = int(os.environ.get("SAMCORE_RESPALDO_CADA", "300"))
+
 ESQUEMA = """
 CREATE TABLE IF NOT EXISTS usuarios (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,10 +82,69 @@ def _migrar(con: sqlite3.Connection) -> None:
                 con.execute(f"ALTER TABLE {tabla} ADD COLUMN {nombre} {definicion}")
 
 
+def restaurar_desde_respaldo() -> bool:
+    """Si no existe la BD local pero sí el respaldo, lo copia. True si restauró."""
+    if RUTA_RESPALDO is None or RUTA_BD.exists() or not RUTA_RESPALDO.is_file():
+        return False
+    RUTA_BD.parent.mkdir(parents=True, exist_ok=True)
+    origen = sqlite3.connect(RUTA_RESPALDO)
+    try:
+        destino = sqlite3.connect(RUTA_BD)
+        try:
+            origen.backup(destino)
+        finally:
+            destino.close()
+    finally:
+        origen.close()
+    log.info("evento=bd_restaurada desde=%s", RUTA_RESPALDO)
+    return True
+
+
+def respaldar() -> bool:
+    """Copia consistente de la BD al respaldo (API de backup de SQLite)."""
+    if RUTA_RESPALDO is None or not RUTA_BD.exists():
+        return False
+    try:
+        RUTA_RESPALDO.parent.mkdir(parents=True, exist_ok=True)
+        temporal = RUTA_RESPALDO.with_name(RUTA_RESPALDO.name + ".tmp")
+        origen = sqlite3.connect(RUTA_BD)
+        try:
+            destino = sqlite3.connect(temporal)
+            try:
+                origen.backup(destino)
+            finally:
+                destino.close()
+        finally:
+            origen.close()
+        os.replace(temporal, RUTA_RESPALDO)
+        return True
+    except (sqlite3.Error, OSError) as exc:
+        log.warning("evento=bd_respaldo_fallido tipo=%s", type(exc).__name__)
+        return False
+
+
+def iniciar_respaldo_periodico() -> None:
+    """Hilo en segundo plano que respalda cada INTERVALO_RESPALDO_S segundos."""
+    import threading
+    import time
+
+    if RUTA_RESPALDO is None:
+        return
+
+    def ciclo() -> None:
+        while True:
+            time.sleep(INTERVALO_RESPALDO_S)
+            respaldar()
+
+    threading.Thread(target=ciclo, name="respaldo-bd", daemon=True).start()
+    log.info("evento=respaldo_programado cada_s=%s destino=%s", INTERVALO_RESPALDO_S, RUTA_RESPALDO)
+
+
 def iniciar() -> None:
     from . import seguridad
 
     RUTA_BD.parent.mkdir(parents=True, exist_ok=True)
+    restaurar_desde_respaldo()
     con = conectar()
     try:
         con.execute("PRAGMA journal_mode = WAL")

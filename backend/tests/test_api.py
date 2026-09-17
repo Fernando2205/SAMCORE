@@ -261,6 +261,22 @@ def test_metricas_del_experimento(servidor, usuario_a):
     assert datos["medias"]["imagen"]["base"] >= datos["medias"]["imagen"]["roi"]
 
 
+def test_m14_respaldo_y_restauracion_de_la_bd(raiz_temporal, monkeypatch):
+    respaldo = raiz_temporal / "respaldo" / "samcore.db"
+    monkeypatch.setattr(db, "RUTA_RESPALDO", respaldo)
+    assert db.respaldar() and respaldo.is_file()
+    con = sqlite3.connect(respaldo)
+    try:
+        assert con.execute("SELECT COUNT(*) FROM usuarios").fetchone()[0] >= 1
+    finally:
+        con.close()
+    # restauracion: sin BD local y con respaldo -> se reconstruye desde el respaldo
+    local = raiz_temporal / "restaurada" / "samcore.db"
+    monkeypatch.setattr(db, "RUTA_BD", local)
+    assert db.restaurar_desde_respaldo() and local.is_file()
+    assert not db.restaurar_desde_respaldo()  # ya existe: no se sobrescribe
+
+
 # ------------------------------------------------ M-14 persistencia ---
 def test_m14_bd_en_modo_wal_y_datos_persisten(raiz_temporal):
     con = sqlite3.connect(raiz_temporal / "pruebas.db")
