@@ -250,6 +250,15 @@ def imagen_galeria(categoria: str, imagen_id: str, usuario: UsuarioActual) -> Fi
     return FileResponse(ruta, media_type="image/png", headers={"Cache-Control": "private, max-age=86400"})
 
 
+@app.get("/api/galeria/{categoria}/miniatura/{imagen_id:path}")
+def miniatura_galeria(categoria: str, imagen_id: str, usuario: UsuarioActual) -> FileResponse:
+    """Version reducida (320 px, JPEG) para la cuadricula de la galeria."""
+    ruta = galeria.ruta_miniatura(categoria, imagen_id) if galeria.es_categoria_valida(categoria) else None
+    if ruta is None:
+        raise HTTPException(422, {"error": "parametros", "mensaje": "Categoría o imagen fuera de la galería."})
+    return FileResponse(ruta, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=604800"})
+
+
 # ------------------------------------------------------------- inferencia ---
 def _ejecutar_motor(imagen: Image.Image, categoria: str, clave: str) -> dict:
     if MODO_MOTOR != "simulado":

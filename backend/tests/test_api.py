@@ -59,6 +59,14 @@ def test_inspeccion_de_galeria_genera_informe_completo(usuario_a):
     assert informe.json()["veredicto"] == datos["veredicto"]
 
 
+def test_miniaturas_de_galeria(usuario_a, raiz_temporal):
+    r = usuario_a.get("/api/galeria/capsule/miniatura/good/000.png")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+    assert len(r.content) < 20_000  # reducida frente al PNG original
+    assert (raiz_temporal / "miniaturas" / "capsule" / "good__000.jpg").is_file()
+    assert usuario_a.get("/api/galeria/capsule/miniatura/../../x.png").status_code == 422
+
+
 def test_historial_lista_solo_lo_propio(usuario_a, usuario_b):
     _inspeccionar(usuario_a, imagen="good/001.png")
     ids_a = {f["id"] for f in usuario_a.get("/api/historial").json()}

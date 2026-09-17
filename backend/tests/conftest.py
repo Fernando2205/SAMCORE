@@ -17,6 +17,7 @@ os.environ.update({
     "SAMCORE_BD": str(_TMP / "pruebas.db"),
     "SAMCORE_DATOS": str(_TMP / "datos"),
     "SAMCORE_GALERIA": str(_TMP / "galeria"),
+    "SAMCORE_MINIATURAS": str(_TMP / "miniaturas"),
     "SAMCORE_ARTEFACTOS": str(_TMP / "artefactos"),
     "SAMCORE_FRONTEND": str(_TMP / "sin_frontend"),
     "SAMCORE_ADMIN_CORREO": "operador@pruebas.local",

@@ -74,6 +74,30 @@ def ruta_imagen(categoria: str, imagen_id: str) -> Path | None:
     return _mapa.get(categoria, {}).get(imagen_id)
 
 
+LADO_MINIATURA = 320
+RUTA_MINIATURAS = Path(os.environ.get("SAMCORE_MINIATURAS", Path(__file__).resolve().parent.parent / "datos" / "miniaturas"))
+
+
+def ruta_miniatura(categoria: str, imagen_id: str) -> Path | None:
+    """Miniatura JPEG de la imagen de galeria (se genera una vez y se guarda).
+    El nombre de archivo se deriva del identificador validado, nunca del
+    texto del cliente."""
+    from PIL import Image
+
+    original = ruta_imagen(categoria, imagen_id)
+    if original is None:
+        return None
+    tipo, nombre = imagen_id.split("/", 1)
+    destino = RUTA_MINIATURAS / categoria / f"{tipo}__{Path(nombre).stem}.jpg"
+    if not destino.is_file():
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        with Image.open(original) as img:
+            img = img.convert("RGB")
+            img.thumbnail((LADO_MINIATURA, LADO_MINIATURA), Image.Resampling.LANCZOS)
+            img.save(destino, format="JPEG", quality=82, optimize=True)
+    return destino
+
+
 def es_categoria_valida(categoria: str) -> bool:
     return categoria in CATEGORIAS_MVTEC
 

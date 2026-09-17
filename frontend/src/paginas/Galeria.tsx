@@ -11,9 +11,10 @@ function Miniatura ({ categoria, imagenId, numero, onClick }: { categoria: strin
     >
       <span className='flex h-[140px] items-center justify-center overflow-hidden bg-papel-2'>
         <img
-          src={`/api/galeria/${categoria}/imagen/${imagenId}`}
+          src={`/api/galeria/${categoria}/miniatura/${imagenId}`}
           alt={`${categoria} ${imagenId}`}
           loading='lazy'
+          decoding='async'
           className='h-full w-full object-cover'
         />
       </span>
