@@ -66,7 +66,10 @@ app.add_middleware(
 async def _cabeceras_seguridad(request: Request, call_next):
     respuesta = await call_next(request)
     respuesta.headers["X-Content-Type-Options"] = "nosniff"
-    respuesta.headers["X-Frame-Options"] = "DENY"
+    # Contra el secuestro de clics: solo el propio origen y huggingface.co
+    # (la pestaña App del Space muestra la aplicación en un marco embebido)
+    # pueden enmarcar la aplicación; cualquier otro sitio queda bloqueado.
+    respuesta.headers["Content-Security-Policy"] = "frame-ancestors 'self' https://huggingface.co"
     respuesta.headers["Referrer-Policy"] = "same-origin"
     if request.url.path.startswith("/api") and "image/" not in respuesta.headers.get("content-type", ""):
         respuesta.headers["Cache-Control"] = "no-store"
