@@ -114,7 +114,9 @@ function ticks (maximo: number, n = 4): number[] {
   const potencia = Math.pow(10, Math.floor(Math.log10(bruto)))
   const paso = [1, 2, 5, 10].map(m => m * potencia).find(p => p >= bruto) ?? potencia
   const salida: number[] = []
-  for (let v = 0; v <= maximo + paso * 0.001; v += paso) salida.push(Math.round(v * 1000) / 1000)
+  // la ultima marca debe alcanzar o superar el maximo: si no, los valores por encima quedan fuera del lienzo
+  const techo = Math.ceil(maximo / paso - 1e-9) * paso
+  for (let v = 0; v <= techo + paso * 0.001; v += paso) salida.push(Math.round(v * 1000) / 1000)
   return salida
 }
 
@@ -266,7 +268,7 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
               {marcas.map(m => (
                 <g key={m}>
                   <line x1={x(m)} x2={x(m)} y1={arriba} y2={arriba + conDatos.length * filaH} stroke={COLOR_REJILLA} strokeWidth={1} />
-                  <text x={x(m)} y={alto - 6} textAnchor='middle' className='fill-texto-4' fontSize={10} fontFamily='IBM Plex Mono, monospace'>
+                  <text x={x(m)} y={alto - 6} textAnchor={m === 0 ? 'start' : m === techo ? 'end' : 'middle'} className='fill-texto-4' fontSize={10} fontFamily='IBM Plex Mono, monospace'>
                     {fmt(m, unidad === 's' ? 1 : 0)} {unidad}
                   </text>
                 </g>
