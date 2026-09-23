@@ -13,7 +13,7 @@ const FILTROS: { clave: Filtro, nombre: string }[] = [
   { clave: 'propias', nombre: 'Imágenes propias' }
 ]
 
-const COLUMNAS = 'grid-cols-[28px_64px_150px_100px_1fr_90px_120px_150px_100px_60px]'
+const COLUMNAS = 'min-w-[1000px] grid-cols-[28px_64px_150px_100px_1fr_90px_120px_150px_100px_60px]'
 
 export function PaginaHistorial () {
   const navegar = useNavigate()
@@ -93,7 +93,7 @@ export function PaginaHistorial () {
   }
 
   return (
-    <div className='flex flex-1 flex-col px-12 pb-8'>
+    <div className='flex flex-1 flex-col px-6 xl:px-12 pb-8'>
       <div className='anim-aparecer mt-6 flex items-end justify-between'>
         <h1 className='font-serif text-[34px] leading-tight'>Tu historial de inspecciones</h1>
         <span className='font-mono text-[12px] text-texto-2'>
@@ -168,7 +168,7 @@ export function PaginaHistorial () {
                 </div>
                 )
               : (
-                <div className='mt-4 border border-hairline bg-white'>
+                <div className='mt-4 overflow-x-auto border border-hairline bg-white'>
                   <div className={`grid ${COLUMNAS} items-center gap-3 border-b-2 border-tinta px-5 py-3 font-mono text-[10.5px] uppercase tracking-[1.5px] text-texto-4`}>
                     <input
                       type='checkbox'

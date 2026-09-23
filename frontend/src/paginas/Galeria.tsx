@@ -60,7 +60,7 @@ export function PaginaGaleria () {
   }
 
   return (
-    <div className='flex flex-1 flex-col px-12 pb-8'>
+    <div className='flex flex-1 flex-col px-6 xl:px-12 pb-8'>
       <div className='mt-5 flex items-center gap-2.5 border border-marca/35 bg-marca/5 px-4 py-2.5 text-[13px] text-[#2f4a44]'>
         <svg width='16' height='16' viewBox='0 0 24 24' fill='none' className='shrink-0' aria-hidden='true'>
           <circle cx='12' cy='12' r='10' stroke='#0c7a6b' strokeWidth='2' />
@@ -122,7 +122,7 @@ export function PaginaGaleria () {
               </p>
               )
             : (
-              <div className='mt-3 grid grid-cols-6 gap-4'>
+              <div className='mt-3 grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-4'>
                 {galeria.imagenes.map((imagen, i) => (
                   <Miniatura
                     key={imagen}

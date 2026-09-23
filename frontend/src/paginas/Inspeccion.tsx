@@ -159,7 +159,7 @@ export function PaginaInspeccion () {
   }
 
   return (
-    <div className='flex flex-1 flex-col px-12 pb-8'>
+    <div className='flex flex-1 flex-col px-6 xl:px-12 pb-8'>
       <div className='mt-6 flex items-end justify-between'>
         <div className='flex flex-col gap-1.5'>
           <Link to={reabriendo ? '/historial' : '/'} className='flex items-center gap-2 text-[13px] font-semibold text-marca'>

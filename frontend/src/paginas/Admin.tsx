@@ -117,7 +117,7 @@ export function PaginaAdmin () {
   )
 
   return (
-    <div className='flex flex-1 flex-col px-12 pb-8'>
+    <div className='flex flex-1 flex-col px-6 xl:px-12 pb-8'>
       <div className='mt-6 flex items-end justify-between'>
         <h1 className='font-serif text-[34px] leading-tight'>Administración de acceso</h1>
         <span className='font-mono text-[12px] text-texto-2'>
@@ -150,8 +150,8 @@ export function PaginaAdmin () {
         ))}
       </div>
 
-      <div className='mt-4 border border-hairline bg-white'>
-        <div className='grid grid-cols-[1.6fr_130px_130px_150px_110px_300px] gap-3 border-b-2 border-tinta px-5 py-3 font-mono text-[10.5px] uppercase tracking-[1.5px] text-texto-4'>
+      <div className='mt-4 overflow-x-auto border border-hairline bg-white'>
+        <div className='grid min-w-[1060px] grid-cols-[1.6fr_130px_130px_150px_110px_300px] gap-3 border-b-2 border-tinta px-5 py-3 font-mono text-[10.5px] uppercase tracking-[1.5px] text-texto-4'>
           <span>Correo</span><span>Rol</span><span>Estado</span><span>Último acceso</span>
           <span>Inspecciones</span><span>Acciones</span>
         </div>
@@ -163,7 +163,7 @@ export function PaginaAdmin () {
         {visibles.map(u => (
           <div
             key={u.id}
-            className={`grid grid-cols-[1.6fr_130px_130px_150px_110px_300px] items-center gap-3 border-b border-hairline-2 px-5 py-3 text-[13px] last:border-b-0 ${u.estado === 'pendiente' ? 'bg-alerta/5' : ''}`}
+            className={`grid min-w-[1060px] grid-cols-[1.6fr_130px_130px_150px_110px_300px] items-center gap-3 border-b border-hairline-2 px-5 py-3 text-[13px] last:border-b-0 ${u.estado === 'pendiente' ? 'bg-alerta/5' : ''}`}
           >
             <span className='font-mono text-[12.5px]'>{u.correo}</span>
             {u.rol === 'administrador'

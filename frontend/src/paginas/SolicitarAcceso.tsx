@@ -38,7 +38,7 @@ export function PaginaSolicitarAcceso () {
 
   return (
     <div className='flex min-h-screen flex-col'>
-      <header className='flex h-[66px] items-center border-b border-tinta px-12'>
+      <header className='flex h-[66px] items-center border-b border-tinta px-6 xl:px-12'>
         <div className='flex items-center gap-3'>
           <Sello tamano={32} />
           <div className='flex items-baseline gap-3'>
@@ -142,7 +142,7 @@ export function PaginaSolicitarAcceso () {
             )}
       </main>
 
-      <footer className='flex items-center justify-between border-t border-tinta px-12 py-3.5 font-mono text-[10.5px] text-texto-4'>
+      <footer className='flex items-center justify-between border-t border-tinta px-6 xl:px-12 py-3.5 font-mono text-[10.5px] text-texto-4'>
         <span>Trabajo de grado · Ingeniería de Sistemas · Universidad de San Buenaventura Cali</span>
         <span>Imágenes: MVTec AD © MVTec Software GmbH · CC BY-NC-SA 4.0</span>
       </footer>

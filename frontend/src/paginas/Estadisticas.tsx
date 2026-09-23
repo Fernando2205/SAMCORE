@@ -470,7 +470,7 @@ export function PaginaEstadisticas () {
   }
 
   return (
-    <div className='flex flex-1 flex-col px-12 pb-8'>
+    <div className='flex flex-1 flex-col px-6 xl:px-12 pb-8'>
       <div className='mt-6 flex items-end justify-between'>
         <div>
           <h1 className='font-serif text-[34px] leading-tight'>Estadísticas de uso</h1>
@@ -492,7 +492,7 @@ export function PaginaEstadisticas () {
           )
         : (
           <>
-            <div className='mt-5 grid grid-cols-4 gap-4'>
+            <div className='mt-5 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4'>
               <Kpi rotulo='Inspecciones' valor={datos.total} formato={n => fmt(Math.round(n))} detalle={`${fmt(datos.propias)} con imagen propia`} orden={0} />
               <Kpi rotulo='Veredictos anómalos' valor={datos.anomalas} formato={n => fmt(Math.round(n))} detalle={`${fmt(datos.pct_anomalas, 1)} %`} orden={1} />
               <Kpi rotulo='Tasa de ROI degradada' valor={datos.pct_roi_degradada} formato={n => `${fmt(n, 1)} %`} orden={2} />
