@@ -1,0 +1,5 @@
+# Dependencias de verificación (pruebas y scripts de prueba por HTTP),
+# fijadas como las de ejecución (M-08).
+-r requirements.txt
+pytest==9.1.1
+httpx==0.28.1

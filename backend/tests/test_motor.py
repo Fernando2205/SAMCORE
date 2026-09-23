@@ -125,3 +125,40 @@ def test_artefactos_manifiesto_y_hash(tmp_path, monkeypatch):
     (carpeta / "manifiesto.json").unlink()
     artefactos._cache.clear()
     assert not artefactos.disponibles("capsule")
+
+
+def test_m07_pesos_de_sam_ausentes_o_alterados(tmp_path, monkeypatch):
+    import torch
+
+    from app.motor import segmentador
+
+    monkeypatch.setattr(segmentador, "RUTA_PESOS", tmp_path)
+    assert not segmentador.verificar_checkpoint()  # ausentes
+    (tmp_path / segmentador.SAM_ARCHIVO).write_bytes(b"no son los pesos oficiales")
+    assert not segmentador.verificar_checkpoint()  # hash distinto del oficial
+    with pytest.raises(RuntimeError):
+        segmentador.SegmentadorSAM(torch.device("cpu")).cargar()
+
+
+def test_m01_m05_orquestador_cola_acotada_y_tiempo_maximo(monkeypatch):
+    import time
+
+    from app.motor import orquestador
+
+    motor = orquestador.OrquestadorInferencia()
+    motor.estado = "listo"
+    motor._bancos = {"capsule": None}
+    try:
+        monkeypatch.setattr(orquestador, "TIEMPO_MAXIMO_S", 0.05)
+        monkeypatch.setattr(motor, "_pipeline", lambda imagen, categoria: time.sleep(0.4) or {"ok": True})
+        with pytest.raises(orquestador.TiempoAgotado):
+            motor.inspeccionar(None, "capsule")
+        monkeypatch.setattr(orquestador, "TIEMPO_MAXIMO_S", 5.0)
+        monkeypatch.setattr(motor, "_pipeline", lambda imagen, categoria: {"ok": True})
+        assert motor.inspeccionar(None, "capsule") == {"ok": True}
+        assert motor._en_cola == 0
+        motor._en_cola = orquestador.COLA_MAXIMA
+        with pytest.raises(orquestador.ColaLlena):
+            motor.inspeccionar(None, "capsule")
+    finally:
+        motor._ejecutor.shutdown(wait=True)

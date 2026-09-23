@@ -3,6 +3,7 @@ de amenazas (M-01 a M-17) mas el contrato funcional de inspeccion,
 historial e informe."""
 import io
 import json
+import logging
 import sqlite3
 
 from PIL import Image, PngImagePlugin
@@ -310,3 +311,93 @@ def test_estadisticas_agregadas(usuario_a):
     assert fila["normales"] + fila["anomalas"] == fila["inspecciones"]
     assert fila["seg_p95_ms"] is not None and fila["det_p50_ms"] is not None
     assert datos["seg_p95_ms"] >= datos["det_p95_ms"]
+
+
+# ------------------------------- M-01/M-05 cola llena y tiempo agotado ---
+def test_m01_m05_cola_llena_y_tiempo_agotado_responden_503(admin, monkeypatch):
+    from app import main as modulo_main
+    from app.motor import orquestador
+
+    class MotorOcupado:
+        estado = "listo"
+
+        def soporta(self, categoria):
+            return True
+
+        def inspeccionar(self, imagen, categoria):
+            raise orquestador.ColaLlena()
+
+    class MotorLento(MotorOcupado):
+        def inspeccionar(self, imagen, categoria):
+            raise orquestador.TiempoAgotado()
+
+    cliente = crear_usuario(admin, "cola@pruebas.local")
+    monkeypatch.setattr(modulo_main, "MODO_MOTOR", "real")
+    monkeypatch.setattr(modulo_main.artefactos, "disponibles", lambda categoria: True)
+    monkeypatch.setattr(orquestador, "instancia", lambda: MotorOcupado())
+    r = _inspeccionar(cliente)
+    assert r.status_code == 503 and r.json()["error"] == "ocupado"
+    monkeypatch.setattr(orquestador, "instancia", lambda: MotorLento())
+    r = _inspeccionar(cliente)
+    assert r.status_code == 503 and r.json()["error"] == "tiempo"
+
+
+# ------------------------------------------ M-04 politica de mismo origen ---
+def test_m04_sin_cors_para_otros_origenes(servidor):
+    r = servidor.options("/api/inspeccionar", headers={"Origin": "https://otro.example", "Access-Control-Request-Method": "POST"})
+    assert r.status_code == 400 and "access-control-allow-origin" not in r.headers
+    r = servidor.get("/api/salud", headers={"Origin": "https://otro.example"})
+    assert r.status_code == 200 and "access-control-allow-origin" not in r.headers
+
+
+# -------------------------------------------- M-09 registro sin datos sensibles ---
+def test_m09_log_sin_correos_ni_contrasenas(admin, caplog):
+    with caplog.at_level(logging.INFO, logger="samcore"):
+        cliente = crear_usuario(admin, "registro-log@pruebas.local", contrasena="clave-secreta-987")
+        assert _inspeccionar(cliente).status_code == 200
+        assert cliente.post("/api/auth/logout").status_code == 200
+    texto = caplog.text
+    assert "evento=inspeccion" in texto and "usuario=" in texto
+    assert "registro-log@pruebas.local" not in texto and "clave-secreta-987" not in texto
+
+
+# ---------------------------------------------------- M-11 sesion expirada ---
+def test_m11_sesion_expirada(admin):
+    cliente = crear_usuario(admin, "expira@pruebas.local")
+    usuario_id = next(u["id"] for u in admin.get("/api/admin/usuarios").json() if u["correo"] == "expira@pruebas.local")
+    con = db.conectar()
+    try:
+        con.execute("UPDATE sesiones SET expira_en = datetime('now', '-1 minute') WHERE usuario_id = ?", (usuario_id,))
+        con.commit()
+    finally:
+        con.close()
+    r = cliente.get("/api/sesion")
+    assert r.status_code == 401 and r.json()["error"] == "sesion_expirada"
+
+
+# -------------------------------- M-15/M-17 eliminacion de cuenta en cascada ---
+def test_m15_m17_eliminar_cuenta_borra_en_cascada(admin, usuario_a, raiz_temporal):
+    cliente = crear_usuario(admin, "eliminar@pruebas.local")
+    ids = [_inspeccionar(cliente).json()["id"], _subir(cliente, _png()).json()["id"]]
+    usuario_id = next(u["id"] for u in admin.get("/api/admin/usuarios").json() if u["correo"] == "eliminar@pruebas.local")
+    assert usuario_a.delete(f"/api/admin/usuarios/{usuario_id}").status_code == 403
+    r = admin.delete(f"/api/admin/usuarios/{usuario_id}")
+    assert r.status_code == 200 and r.json()["inspecciones_borradas"] == 2
+    assert all(not (raiz_temporal / "datos" / "inspecciones" / str(i)).exists() for i in ids)
+    assert cliente.get("/api/sesion").status_code == 401
+    r = cliente.post("/api/auth/login", json={"correo": "eliminar@pruebas.local", "contrasena": "contrasena-larga-1"})
+    assert r.status_code == 401
+    assert all(u["correo"] != "eliminar@pruebas.local" for u in admin.get("/api/admin/usuarios").json())
+    con = db.conectar()
+    try:
+        for tabla in ("inspecciones", "sesiones"):
+            assert con.execute(f"SELECT COUNT(*) FROM {tabla} WHERE usuario_id = ?", (usuario_id,)).fetchone()[0] == 0
+    finally:
+        con.close()
+    assert admin.delete(f"/api/admin/usuarios/{usuario_id}").status_code == 404
+
+
+def test_m15_ultimo_administrador_no_se_elimina(admin):
+    yo = next(u for u in admin.get("/api/admin/usuarios").json() if u["rol"] == "administrador" and u["estado"] == "activo")
+    r = admin.delete(f"/api/admin/usuarios/{yo['id']}")
+    assert r.status_code == 409 and r.json()["error"] == "ultimo_admin"
