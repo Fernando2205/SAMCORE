@@ -1,6 +1,6 @@
 """Artefactos por categoria: descubrimiento, verificacion y carga.
 
-Contrato con el cuaderno experimental (D-08, sin pickle en la ruta de carga):
+Contrato con el cuaderno experimental (sin pickle en la ruta de carga):
 
     backend/artefactos/<categoria>/
         manifiesto.json      metadatos + SHA-256 de cada archivo

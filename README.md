@@ -75,6 +75,7 @@ pnpm run dev
 
 ```powershell
 cd backend
+.\.venv\Scripts\pip install -r requirements-dev.txt   # pytest y httpx, solo la primera vez
 .\.venv\Scripts\python -m pytest tests            # controles M-01…M-17 y motor
 .\.venv\Scripts\python scripts\prueba_motor.py capsule galeria\capsule\good\000.png
 .\.venv\Scripts\python scripts\prueba_extremo_a_extremo.py http://127.0.0.1:8000 <correo> <contraseña> foto.png

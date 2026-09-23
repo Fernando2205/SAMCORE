@@ -1,7 +1,8 @@
 """Segmentador SAM 1 (ViT-H) en modo de generacion automatica de mascaras.
 
-- Pesos verificados por SHA-256 antes de cargar (M-07); la carga usa
-  `weights_only` de torch, que solo admite tensores (sin codigo).
+- Pesos verificados por SHA-256 antes de cargar (M-07); la carga pasa por
+  `torch.load`, que desde torch 2.6 usa `weights_only=True` por defecto
+  (solo tensores, sin codigo).
 - Precision: fp32 en la GPU del despliegue; fp16 (pesos en media precision
   mas autocast) para la verificacion funcional en una GPU pequena.
 - Tope de mascaras consideradas por imagen (M-05).

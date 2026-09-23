@@ -63,7 +63,7 @@ def usuario_por_token(con: sqlite3.Connection, token: str) -> sqlite3.Row | None
 
 
 def usuario_actual(request: Request) -> sqlite3.Row:
-    """Dependencia FastAPI: exige sesion valida (login obligatorio, D-11)."""
+    """Dependencia FastAPI: exige sesion valida (login obligatorio)."""
     from . import db
 
     token = request.cookies.get(COOKIE_SESION)

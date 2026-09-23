@@ -7,5 +7,6 @@ Modulos:
   el banco de memoria (misma ruta de calculo que la implementacion de
   referencia usada en el experimento).
 - reproyeccion: mapa de anomalias en coordenadas de la imagen original.
-- orquestador: pipeline completo, con concurrencia acotada y topes por etapa.
+- orquestador: pipeline completo, con concurrencia acotada y tope de tiempo
+  por inspeccion.
 """

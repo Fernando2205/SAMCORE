@@ -17,7 +17,7 @@ CATEGORIAS_MVTEC = (
 
 # Solo para el motor simulado (desarrollo y pruebas): umbrales ilustrativos.
 UMBRALES_ILUSTRATIVOS = {
-    "bottle": 2.772, "cable": 3.512, "capsule": 1.925, "hazelnut": 4.334, "metal_nut": 3.845,
+    "bottle": 2.772, "cable": 5.758, "capsule": 1.925, "hazelnut": 4.334, "metal_nut": 3.948,
     "pill": 2.911, "screw": 2.055, "toothbrush": 1.910, "transistor": 3.232, "zipper": 1.314,
 }
 

@@ -2,9 +2,9 @@
 
 El backend busca aquí los artefactos del pipeline real (SAM + PatchCore).
 Cuando una categoría tiene su carpeta completa y con hashes válidos,
-`/api/salud` y `/api/categorias` la reportan con `artefactos: true`.
-Mientras el motor real no esté integrado, la inferencia es simulada
-aunque existan artefactos.
+`/api/salud` la lista en `categorias_con_artefactos` y el motor real la
+atiende; una categoría cuyo manifiesto no coincide queda deshabilitada
+(422 al inspeccionarla) y el evento se registra en el log.
 
 ## Estructura esperada (por categoría)
 
@@ -39,23 +39,33 @@ nunca con pickle):
 ```json
 {
   "categoria": "capsule",
-  "umbral": 3.417,
+  "umbral": 1.924665,
   "percentil": 99,
-  "n_validacion": 0,
-  "dim_parche": 0,
+  "n_validacion": 32,
+  "n_preparacion": 187,
+  "n_parches": 14660,
+  "dim_parche": 1024,
   "capas": ["layer2", "layer3"],
-  "tam_entrada": [0, 0],
+  "tam_entrada": [224, 224],
+  "resize": 256,
   "coreset_pct": 10,
-  "regla_seleccion": { "area_min_pct": 3, "area_max_pct": 95, "rho": 0.35 },
+  "regla_seleccion": {
+    "area_min_pct": 3, "area_max_pct": 95, "rho": 0.35,
+    "pesos": { "iou": 0.6, "estabilidad": 0.4, "relleno": 0.25, "borde": -0.15 }
+  },
   "semilla": 0,
-  "torchvision": "x.y.z"
+  "torchvision": "0.26.0+cu128"
 }
 ```
 
-Los pesos de SAM (ViT-H) no forman parte de estos artefactos: se
-descargan del checkpoint oficial y se verifican por SHA-256 en el
-despliegue.
+El umbral es el percentil 99 de las puntuaciones de `n_validacion`
+imágenes normales apartadas del entrenamiento antes de construir el banco
+(el banco usa las `n_preparacion` restantes).
 
-La integración del motor real reemplaza únicamente a `app/inferencia.py`
-manteniendo el mismo contrato de salida; la verificación de hashes
-(`app/artefactos.py`) corre sola al primer uso de cada categoría.
+Los pesos de SAM (ViT-H) no forman parte de estos artefactos: se
+descargan del checkpoint oficial y se verifican por SHA-256 al construir
+la imagen de despliegue (`scripts/descargar_pesos.py`).
+
+La verificación de hashes (`app/artefactos.py`) corre al arrancar la API
+para todas las carpetas presentes; los bancos se cargan con
+`allow_pickle=False`.
