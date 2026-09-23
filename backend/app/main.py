@@ -1,9 +1,10 @@
 """API de SamCore (FastAPI).
 
-Contrato de arquitectura_sistema.md §3.5 con cuentas (D-11), carga de imagen
-propia (D-17) y retencion controlada del informe (D-20). Controles:
+Cuentas con acceso administrado, galeria cerrada, carga de imagen propia y
+retencion controlada del informe. Controles:
 listas cerradas (M-03), errores sin detalles internos (M-02), limitacion de
-tasa y cola acotada a la GPU (M-01), topes por etapa (M-05), artefactos sin
+tasa y cola acotada a la GPU (M-01), tope de mascaras y de tiempo por
+inspeccion (M-05), artefactos sin
 pickle y verificados por manifiesto (M-06/M-07), log con atribucion (M-09),
 autenticacion y sesiones (M-10/M-11), historial filtrado por sesion (M-12),
 rol verificado en servidor (M-15), ingesta segura (M-16) y retencion
@@ -621,6 +622,38 @@ def admin_cambiar_estado(usuario_id: int, datos: DatosEstadoUsuario, usuario: Us
         _anonimo(usuario["correo"]), _anonimo(objetivo["correo"]), datos.accion, hacia,
     )
     return {"id": usuario_id, "estado": hacia}
+
+
+@app.delete("/api/admin/usuarios/{usuario_id}")
+def admin_eliminar_usuario(usuario_id: int, usuario: UsuarioActual) -> dict:
+    """Elimina la cuenta en cascada: sesiones, inspecciones y sus imagenes
+    (M-17). La regla del ultimo administrador aplica igual que al desactivar."""
+    seguridad.requiere_admin(usuario)
+    con = db.conectar()
+    try:
+        objetivo = con.execute("SELECT * FROM usuarios WHERE id = ?", (usuario_id,)).fetchone()
+        if objetivo is None:
+            raise HTTPException(404, {"error": "no_encontrado", "mensaje": "La cuenta no existe; recarga la tabla."})
+        if objetivo["rol"] == "administrador" and objetivo["estado"] == "activo":
+            admins_activos = con.execute(
+                "SELECT COUNT(*) FROM usuarios WHERE rol = 'administrador' AND estado = 'activo'"
+            ).fetchone()[0]
+            if admins_activos <= 1:
+                raise HTTPException(409, {"error": "ultimo_admin", "mensaje": "No es posible eliminar la última cuenta de administrador."})
+        inspecciones = [f["id"] for f in con.execute("SELECT id FROM inspecciones WHERE usuario_id = ?", (usuario_id,)).fetchall()]
+        con.execute("DELETE FROM sesiones WHERE usuario_id = ?", (usuario_id,))
+        con.execute("DELETE FROM inspecciones WHERE usuario_id = ?", (usuario_id,))
+        con.execute("DELETE FROM usuarios WHERE id = ?", (usuario_id,))
+        con.commit()
+    finally:
+        con.close()
+    for inspeccion_id in inspecciones:
+        almacen.borrar(inspeccion_id)
+    log.info(
+        "evento=admin_eliminar admin=%s objetivo=%s inspecciones=%s",
+        _anonimo(usuario["correo"]), _anonimo(objetivo["correo"]), len(inspecciones),
+    )
+    return {"id": usuario_id, "eliminada": True, "inspecciones_borradas": len(inspecciones)}
 
 
 # ---------------------------------------------------------------- frontend ---

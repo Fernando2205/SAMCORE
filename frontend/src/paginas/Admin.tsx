@@ -4,12 +4,12 @@ import { api, ErrorApi } from '../api'
 import type { UsuarioAdmin } from '../api'
 import { useSesion } from '../auth'
 
-type Accion = 'aprobar' | 'rechazar' | 'desactivar' | 'reactivar'
+type Accion = 'aprobar' | 'rechazar' | 'desactivar' | 'reactivar' | 'eliminar'
 type Filtro = 'todos' | 'pendiente' | 'activo' | 'desactivado'
 
 interface Confirmacion {
   usuario: UsuarioAdmin
-  accion: 'rechazar' | 'desactivar'
+  accion: 'rechazar' | 'desactivar' | 'eliminar'
 }
 
 const TEXTO_CONFIRMACION = {
@@ -22,6 +22,11 @@ const TEXTO_CONFIRMACION = {
     titulo: '¿Desactivar esta cuenta?',
     cuerpo: 'Perderá el acceso de inmediato y su sesión se cerrará. Su historial se conserva y puedes reactivarla cuando quieras.',
     boton: 'Desactivar'
+  },
+  eliminar: {
+    titulo: '¿Eliminar esta cuenta?',
+    cuerpo: 'Se borran la cuenta, sus sesiones, su historial completo y las imágenes de sus inspecciones. No se puede deshacer.',
+    boton: 'Eliminar'
   }
 } as const
 
@@ -75,15 +80,20 @@ export function PaginaAdmin () {
   const ejecutar = async (usuario: UsuarioAdmin, accion: Accion) => {
     setError(null)
     try {
-      await api(`/admin/usuarios/${usuario.id}/estado`, {
-        method: 'POST',
-        body: JSON.stringify({ accion })
-      })
+      if (accion === 'eliminar') {
+        await api(`/admin/usuarios/${usuario.id}`, { method: 'DELETE' })
+      } else {
+        await api(`/admin/usuarios/${usuario.id}/estado`, {
+          method: 'POST',
+          body: JSON.stringify({ accion })
+        })
+      }
       const textos: Record<Accion, string> = {
         aprobar: `Cuenta aprobada — ${usuario.correo} ya puede entrar.`,
         rechazar: `Solicitud rechazada — ${usuario.correo}`,
         desactivar: `Cuenta desactivada — ${usuario.correo}`,
-        reactivar: `Cuenta reactivada — ${usuario.correo}`
+        reactivar: `Cuenta reactivada — ${usuario.correo}`,
+        eliminar: `Cuenta eliminada con su historial — ${usuario.correo}`
       }
       setAviso(textos[accion])
       setTimeout(() => setAviso(null), 4000)
@@ -180,6 +190,9 @@ export function PaginaAdmin () {
               {u.estado === 'desactivado' && (
                 <BotonSecundario texto='Reactivar' alPulsar={() => { ejecutar(u, 'reactivar') }} />
               )}
+              {u.correo !== sesion?.correo && (
+                <BotonSecundario texto='Eliminar' alPulsar={() => setConfirmacion({ usuario: u, accion: 'eliminar' })} />
+              )}
               {u.estado === 'activo' && u.correo === sesion?.correo && <span className='text-[12px] text-texto-4'>—</span>}
             </span>
           </div>
@@ -188,8 +201,9 @@ export function PaginaAdmin () {
 
       <p className='mt-3 text-[12px] text-texto-4'>
         Toda la actividad queda registrada por usuario. El rol se verifica en el servidor en cada
-        acción; Aprobar y Reactivar son reversibles y no piden confirmación. No es posible
-        desactivar la última cuenta de administrador.
+        acción; Aprobar y Reactivar son reversibles y no piden confirmación. Eliminar borra la
+        cuenta con su historial y sus imágenes, y no se puede deshacer. No es posible desactivar
+        ni eliminar la última cuenta de administrador.
       </p>
 
       {aviso !== null && (
