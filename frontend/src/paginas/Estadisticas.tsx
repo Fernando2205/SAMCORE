@@ -248,7 +248,8 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
   const maximo = Math.max(1, ...conDatos.map(f => (p95(f) ?? 0) / escala))
   const marcas = ticks(maximo, 3)
   const techo = marcas[marcas.length - 1]
-  const ancho = 320; const filaH = 24; const izq = 8; const der = 16; const arriba = 6
+  // los nombres van dentro del SVG: si estuvieran fuera, con alto fijo, se desalinean de las filas al escalar el gráfico
+  const ancho = 400; const filaH = 24; const izq = 86; const der = 16; const arriba = 6
   const alto = arriba + conDatos.length * filaH + 22
   const x = (v: number) => izq + (v / techo) * (ancho - izq - der)
 
@@ -258,12 +259,7 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
       {conDatos.length === 0
         ? <p className='mt-2 text-[12px] text-texto-4'>Sin tiempos por etapa registrados todavía.</p>
         : (
-          <div className='mt-2 flex gap-2'>
-            <div className='flex flex-col' style={{ paddingTop: arriba }}>
-              {conDatos.map(f => (
-                <span key={f.categoria} className='flex items-center font-mono text-[12px] text-texto-2' style={{ height: filaH }}>{f.categoria}</span>
-              ))}
-            </div>
+          <div className='mt-2'>
             <svg viewBox={`0 0 ${ancho} ${alto}`} className='w-full' role='img' aria-label={titulo}>
               {marcas.map(m => (
                 <g key={m}>
@@ -287,6 +283,7 @@ function PanelTiempos ({ titulo, color, filas, p50, p95, unidad }: {
                     onBlur={ocultar}
                   >
                     <rect x={0} y={cy - filaH / 2} width={ancho} height={filaH} fill='transparent' />
+                    <text x={0} y={cy + 4} className='fill-texto-2' fontSize={12} fontFamily='IBM Plex Mono, monospace'>{f.categoria}</text>
                     <line className='anim-crecer-x' style={retraso(i * 50)} x1={x(a)} x2={x(b)} y1={cy} y2={cy} stroke={color} strokeWidth={2} strokeLinecap='round' />
                     <circle className='anim-aparecer' style={retraso(i * 50 + 450)} cx={x(b)} cy={cy} r={5} fill='white' stroke={color} strokeWidth={2} />
                     <circle className='anim-aparecer' style={retraso(i * 50)} cx={x(a)} cy={cy} r={5} fill={color} stroke='white' strokeWidth={2} />
