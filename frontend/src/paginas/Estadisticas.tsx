@@ -169,7 +169,7 @@ function Histograma ({ intervalos }: { intervalos: IntervaloHistograma[] }) {
         <line x1={xUmbral} x2={xUmbral} y1={arriba - 6} y2={y(0)} stroke={COLOR_TINTA} strokeWidth={1.5} />
         <text x={xUmbral + 5} y={arriba + 2} className='fill-texto-2' fontSize={10} fontFamily='IBM Plex Mono, monospace'>umbral</text>
         <line x1={izq} x2={ancho - der} y1={y(0)} y2={y(0)} stroke={COLOR_REJILLA} strokeWidth={1} />
-        {[0, 0.5, 1.0, 1.5, 2.0].map(v => (
+        {[0, 0.5, 1.0, 1.5].map(v => (
           <text key={v} x={izq + (v / 0.1) * anchoBarra} y={alto - abajo + 14} textAnchor='middle' className='fill-texto-4' fontSize={10} fontFamily='IBM Plex Mono, monospace'>
             {fmt(v, 1)}
           </text>
